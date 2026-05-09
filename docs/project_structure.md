@@ -364,5 +364,6 @@ Add project documentation for g0_robot_lab
 当前有效主线是：
 
 ```text
-g0_robot_lab → tasks/locomotion → G0-Velocity-v
+g0_robot_lab → tasks/locomotion → G0-Velocity-v0
 ```
+ 后续所有分析和修改都应该基于这个结构，不再使用 humanoid_lab_v0 或旧的 manager_based 目录作为当前主线。
