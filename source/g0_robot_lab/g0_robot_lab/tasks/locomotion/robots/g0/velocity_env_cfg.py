@@ -17,7 +17,7 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 
-from . import mdp
+from g0_robot_lab.tasks.locomotion import mdp
 
 ##
 # Pre-defined configs
