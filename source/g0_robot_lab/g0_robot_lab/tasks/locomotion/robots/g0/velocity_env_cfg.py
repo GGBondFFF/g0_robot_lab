@@ -19,7 +19,7 @@ from g0_robot_lab.tasks.locomotion import mdp
 # Pre-defined configs
 ##
 
-from g0_robot_lab.assets.robots.g0 import G0_CFG  # isort:skip
+from g0_robot_lab.assets.robots.g0 import G0_CFG, G0_JOINT_SDK_NAMES  # isort:skip
 
 
 ##
@@ -55,9 +55,10 @@ class ActionsCfg:
 
     joint_pos = mdp.JointPositionActionCfg(
         asset_name="robot",
-        joint_names=[".*"],
+        joint_names=list(G0_JOINT_SDK_NAMES),
         scale=0.25,
         use_default_offset=True,
+        preserve_order=True,
     )
 
 
