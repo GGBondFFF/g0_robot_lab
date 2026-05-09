@@ -94,10 +94,6 @@ G0_RIGHT_ARM_JOINT_NAMES = [
 
 G0_ARM_JOINT_NAMES = G0_LEFT_ARM_JOINT_NAMES + G0_RIGHT_ARM_JOINT_NAMES
 
-
-# SDK / deployment-friendly order.
-# This is not necessarily the same as the URDF traversal order.
-# We put legs first because locomotion policy/action debugging usually focuses on legs first.
 G0_JOINT_SDK_NAMES = [
     "l_hip_pitch_joint",
     "l_hip_roll_joint",
@@ -122,6 +118,34 @@ G0_JOINT_SDK_NAMES = [
     "r_shoulder_yaw_joint",
     "r_elbow_pitch_joint",
 ]
+
+# -------------------------------------------------------------------------------
+# Actuator hardware groups
+# -------------------------------------------------------------------------------
+
+# Six right-angle servos on the current G0 hardware.
+# Assumption:
+#   "ankle" refers to ankle_pitch joints.
+# If the real right-angle ankle servos are ankle_roll instead, replace these two ankle_pitch names.
+G0_RIGHT_ANGLE_SERVO_JOINT_NAMES = [
+    "l_elbow_pitch_joint",
+    "r_elbow_pitch_joint",
+    "l_knee_pitch_joint",
+    "r_knee_pitch_joint",
+    "l_ankle_pitch_joint",
+    "r_ankle_pitch_joint",
+]
+
+# Remaining 16 joints use standard servos.
+G0_STANDARD_SERVO_JOINT_NAMES = [
+    name for name in G0_JOINT_SDK_NAMES if name not in G0_RIGHT_ANGLE_SERVO_JOINT_NAMES
+]
+
+
+# SDK / deployment-friendly order.
+# This is not necessarily the same as the URDF traversal order.
+# We put legs first because locomotion policy/action debugging usually focuses on legs first.
+
 
 
 # -------------------------------------------------------------------------------
@@ -206,111 +230,56 @@ G0_CFG = G0ArticulationCfg(
         joint_vel={".*": 0.0},
     ),
     actuators={
-        # Hip pitch, hip yaw and waist yaw are treated like the stronger G1-style group.
-        "hip_pitch_yaw_waist_yaw": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_hip_pitch_joint",
-                ".*_hip_yaw_joint",
-                "waist_yaw_joint",
-            ],
-            effort_limit_sim={
-                ".*_hip_pitch_joint": 88.0,
-                ".*_hip_yaw_joint": 88.0,
-                "waist_yaw_joint": 88.0,
-            },
-            velocity_limit_sim={
-                ".*_hip_pitch_joint": 32.0,
-                ".*_hip_yaw_joint": 32.0,
-                "waist_yaw_joint": 32.0,
-            },
-            stiffness={
-                ".*_hip_pitch_joint": 100.0,
-                ".*_hip_yaw_joint": 100.0,
-                "waist_yaw_joint": 120.0,
-            },
-            damping={
-                ".*_hip_pitch_joint": 2.0,
-                ".*_hip_yaw_joint": 2.0,
-                "waist_yaw_joint": 4.0,
-            },
-            armature=0.01,
-        ),
-
-        # Hip roll and knee pitch usually need higher torque.
-        "hip_roll_knee": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_hip_roll_joint",
-                ".*_knee_pitch_joint",
-            ],
-            effort_limit_sim={
-                ".*_hip_roll_joint": 139.0,
-                ".*_knee_pitch_joint": 139.0,
-            },
-            velocity_limit_sim={
-                ".*_hip_roll_joint": 20.0,
-                ".*_knee_pitch_joint": 20.0,
-            },
-            stiffness={
-                ".*_hip_roll_joint": 100.0,
-                ".*_knee_pitch_joint": 150.0,
-            },
-            damping={
-                ".*_hip_roll_joint": 2.0,
-                ".*_knee_pitch_joint": 4.0,
-            },
-            armature=0.01,
-        ),
-
-        # Ankles and waist roll are lower-torque stabilizing joints.
-        "ankles_waist_roll": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_ankle_pitch_joint",
-                ".*_ankle_roll_joint",
-                "waist_roll_joint",
-            ],
-            effort_limit_sim={
-                ".*_ankle_pitch_joint": 35.0,
-                ".*_ankle_roll_joint": 35.0,
-                "waist_roll_joint": 35.0,
-            },
-            velocity_limit_sim={
-                ".*_ankle_pitch_joint": 30.0,
-                ".*_ankle_roll_joint": 30.0,
-                "waist_roll_joint": 30.0,
-            },
-            stiffness={
-                ".*_ankle_pitch_joint": 40.0,
-                ".*_ankle_roll_joint": 40.0,
-                "waist_roll_joint": 40.0,
-            },
-            damping={
-                ".*_ankle_pitch_joint": 2.0,
-                ".*_ankle_roll_joint": 2.0,
-                "waist_roll_joint": 4.0,
-            },
-            armature=0.01,
-        ),
-
-        # Arms are kept softer than legs for early walking.
-        "arms": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_shoulder_pitch_joint",
-                ".*_shoulder_roll_joint",
-                ".*_shoulder_yaw_joint",
-                ".*_elbow_pitch_joint",
-            ],
+        # 16 standard servos.
+        # These include:
+        #   hips except knee,
+        #   ankle_roll,
+        #   waist,
+        #   shoulder joints.
+        "standard_servos": ImplicitActuatorCfg(
+            joint_names_expr=G0_STANDARD_SERVO_JOINT_NAMES,
             effort_limit_sim=25.0,
             velocity_limit_sim=37.0,
             stiffness={
+                ".*_hip_pitch_joint": 80.0,
+                ".*_hip_roll_joint": 80.0,
+                ".*_hip_yaw_joint": 80.0,
+                ".*_ankle_roll_joint": 40.0,
+                "waist_yaw_joint": 60.0,
+                "waist_roll_joint": 40.0,
                 ".*_shoulder_pitch_joint": 40.0,
                 ".*_shoulder_roll_joint": 40.0,
                 ".*_shoulder_yaw_joint": 40.0,
-                ".*_elbow_pitch_joint": 40.0,
             },
             damping={
+                ".*_hip_pitch_joint": 2.0,
+                ".*_hip_roll_joint": 2.0,
+                ".*_hip_yaw_joint": 2.0,
+                ".*_ankle_roll_joint": 2.0,
+                "waist_yaw_joint": 3.0,
+                "waist_roll_joint": 3.0,
                 ".*_shoulder_pitch_joint": 1.0,
                 ".*_shoulder_roll_joint": 1.0,
                 ".*_shoulder_yaw_joint": 1.0,
+            },
+            armature=0.01,
+        ),
+
+        # 6 right-angle servos.
+        # Current assumption:
+        #   elbows + knees + ankle_pitch joints.
+        "right_angle_servos": ImplicitActuatorCfg(
+            joint_names_expr=G0_RIGHT_ANGLE_SERVO_JOINT_NAMES,
+            effort_limit_sim=35.0,
+            velocity_limit_sim=30.0,
+            stiffness={
+                ".*_knee_pitch_joint": 100.0,
+                ".*_ankle_pitch_joint": 60.0,
+                ".*_elbow_pitch_joint": 40.0,
+            },
+            damping={
+                ".*_knee_pitch_joint": 3.0,
+                ".*_ankle_pitch_joint": 2.0,
                 ".*_elbow_pitch_joint": 1.0,
             },
             armature=0.01,
