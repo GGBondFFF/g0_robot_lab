@@ -238,7 +238,7 @@ G0_CFG = G0ArticulationCfg(
         #   shoulder joints.
         "standard_servos": ImplicitActuatorCfg(
             joint_names_expr=G0_STANDARD_SERVO_JOINT_NAMES,
-            effort_limit_sim=25.0,
+            effort_limit_sim=0.5,
             velocity_limit_sim=37.0,
             stiffness={
                 ".*_hip_pitch_joint": 80.0,
