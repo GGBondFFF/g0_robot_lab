@@ -435,8 +435,8 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     # terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
-    # lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
-    pass
+    lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
+    # pass
 ##
 # Environment configuration
 ##
