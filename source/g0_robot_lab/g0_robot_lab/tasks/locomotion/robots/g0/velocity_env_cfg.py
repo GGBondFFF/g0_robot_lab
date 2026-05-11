@@ -35,6 +35,10 @@ from g0_robot_lab.assets.robots.g0 import (
     G0_WAIST_JOINT_NAMES,
 )  # isort:skip
 
+G0_FOOT_BODY_NAMES = [
+    "l_foot_link",
+    "r_foot_link",
+]
 
 ##
 # Terrain config
@@ -331,7 +335,7 @@ class RewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     # gpt do not show it
-    # energy = RewTerm(func=mdp.energy, weight=-2e-5)
+    energy = RewTerm(func=mdp.energy, weight=-2e-5)
 
     joint_deviation_arms = RewTerm(
         func=mdp.joint_deviation_l1,
@@ -376,35 +380,47 @@ class RewardsCfg:
     base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.235})
 
     # -- feet
-    # gait = RewTerm(
-    #     func=mdp.feet_gait,
-    #     weight=0.5,
-    #     params={
-    #         "period": 0.8,
-    #         "offset": [0.0, 0.5],
-    #         "threshold": 0.55,
-    #         "command_name": "base_velocity",
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),
-    #     },
-    # )
-    # feet_slide = RewTerm(
-    #     func=mdp.feet_slide,
-    #     weight=-0.2,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),
-    #     },
-    # )
-    # feet_clearance = RewTerm(
-    #     func=mdp.foot_clearance_reward,
-    #     weight=1.0,
-    #     params={
-    #         "std": 0.05,
-    #         "tanh_mult": 2.0,
-    #         "target_height": 0.02,
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
-    #     },
-    # )
+    gait = RewTerm(
+        func=mdp.feet_gait,
+        weight=0.5,
+        params={
+            "period": 0.8,
+            "offset": [0.0, 0.5],
+            "threshold": 0.55,
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=G0_FOOT_BODY_NAMES
+            ),
+        },
+    )
+    feet_slide = RewTerm(
+        func=mdp.feet_slide,
+        weight=-0.2,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                body_names=G0_FOOT_BODY_NAMES
+            ),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=G0_FOOT_BODY_NAMES
+            ),
+        },
+    )
+    feet_clearance = RewTerm(
+        func=mdp.foot_clearance_reward,
+        weight=1.0,
+        params={
+            "std": 0.05,
+            "tanh_mult": 2.0,
+            "target_height": 0.02,
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                body_names=G0_FOOT_BODY_NAMES
+            ),
+        },
+    )
 
     # -- other
     # undesired_contacts = RewTerm(
