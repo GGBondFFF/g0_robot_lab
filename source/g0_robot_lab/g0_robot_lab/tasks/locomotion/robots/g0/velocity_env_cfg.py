@@ -117,10 +117,13 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.3, 1.0),
-            "dynamic_friction_range": (0.3, 1.0),
+            # "static_friction_range": (0.3, 1.0),
+            # "dynamic_friction_range": (0.3, 1.0),
+             "static_friction_range": (0.8, 1.0),
+             "dynamic_friction_range": (0.8, 1.0),
             "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
+            # "num_buckets": 64,
+            "num_buckets": 32,
         },
     )
     # Keep base mass randomization disable at beginning.
@@ -154,7 +157,8 @@ class EventCfg:
                 "x": (-0.2, 0.2),
                 "y": (-0.2, 0.2),
                 # same as code_base, maybe too large, it will be changed later
-                "yaw": (-3.14, 3.14)
+                # "yaw": (-3.14, 3.14)
+                "yaw":(-0.2,0.2)
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
@@ -224,7 +228,8 @@ class ActionsCfg:
     joint_pos = mdp.JointPositionActionCfg(
         asset_name="robot",
         joint_names=list(G0_JOINT_SDK_NAMES),
-        scale=0.25,
+        # scale=0.25,
+        scale = 0.12,
         use_default_offset=True,
         preserve_order=True,
     )
@@ -402,14 +407,14 @@ class RewardsCfg:
     # )
 
     # -- other
-    undesired_contacts = RewTerm(
-        func=mdp.undesired_contacts,
-        weight=-1,
-        params={
-            "threshold": 1,
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
-        },
-    )
+    # undesired_contacts = RewTerm(
+    #     func=mdp.undesired_contacts,
+    #     weight=-1,
+    #     params={
+    #         "threshold": 1,
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
+    #     },
+    # )
 
 @configclass
 class TerminationsCfg:
@@ -422,7 +427,7 @@ class TerminationsCfg:
     )
     bad_orientation = DoneTerm(
         func=mdp.bad_orientation,
-        params={"limit_angle": 0.8},
+        params={"limit_angle": 1.2},
     )
 
 @configclass
@@ -452,18 +457,7 @@ class G0RobotLabEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
-    def __post_init__(self) -> None:
-        """Post initialization."""
-
-        self.decimation = 2
-        self.episode_length_s = 5.0
-
-        self.viewer.eye = (3.0, 3.0, 2.0)
-        self.viewer.lookat = (0.0, 0.0, 0.5)
-
-        self.sim.dt = 1 / 120
-        self.sim.render_interval = self.decimation
-        def __post_init__(self):
+    def __post_init__(self):
             """Post initialization."""
             # general settings
             self.decimation = 4
@@ -489,10 +483,10 @@ class G0RobotLabEnvCfg(ManagerBasedRLEnvCfg):
                     self.scene.terrain.terrain_generator.curriculum = False
 
 @configclass
-class G02RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
+class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 32
         self.scene.terrain.terrain_generator.num_rows = 2
         self.scene.terrain.terrain_generator.num_cols = 10
-        self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
+        # self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
