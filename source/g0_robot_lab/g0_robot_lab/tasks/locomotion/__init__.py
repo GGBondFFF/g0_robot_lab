@@ -10,7 +10,7 @@ from . import agents
 ##
 # Register Gym environments.
 ##
-
+from .robots import *
 gym.register(
     id="G0-Velocity-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",

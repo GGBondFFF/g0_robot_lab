@@ -52,7 +52,7 @@ G0_FLAT_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     vertical_scale=0.005,
     slope_threshold=0.75,
     # initial set difficulty range, it will be changed later
-    difficulty_range=(0.0,0.0),
+    difficulty_range=(0.0,1.0),
     use_cache=False,
     sub_terrains={
         "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.5),
@@ -70,9 +70,11 @@ class G0RobotLabSceneCfg(InteractiveSceneCfg):
     # ground terrain
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="generator",  # "plane", "generator"
-        terrain_generator=G0_FLAT_TERRAIN_CFG, # None, ROUGH_TERRAINS_CFG
-        max_init_terrain_level=G0_FLAT_TERRAIN_CFG.num_rows - 1,
+        # terrain_type="generator",  # "plane", "generator"
+        # terrain_generator=G0_FLAT_TERRAIN_CFG, # None, ROUGH_TERRAINS_CFG
+        # max_init_terrain_level=G0_FLAT_TERRAIN_CFG.num_rows - 1,
+        terrain_type = "plane",
+        terrain_generator = None,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -503,6 +505,9 @@ class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 32
-        self.scene.terrain.terrain_generator.num_rows = 2
-        self.scene.terrain.terrain_generator.num_cols = 10
+
+        if self.scene.terrain.generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 2
+            self.scene.terrain.terrain_generator.num_cols = 10
+
         # self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
