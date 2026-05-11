@@ -23,7 +23,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 from g0_robot_lab.tasks.locomotion import mdp
 
-import isaaclab_tasks.manager_based.locomotion.velocity.mdp as velocity_mdp
+# import isaaclab_tasks.manager_based.locomotion.velocity.mdp as velocity_mdp
 ##
 # Pre-defined configs
 ##
@@ -305,7 +305,7 @@ class RewardsCfg:
     """Reward terms for the MDP."""
     # -- task
     track_lin_vel_xy = RewTerm(
-        func=velocity_mdp.track_lin_vel_xy_yaw_frame_exp,
+        func=mdp.track_lin_vel_xy_yaw_frame_exp,
         weight=1.0,
         params={
             "command_name": "base_velocity",
@@ -313,7 +313,7 @@ class RewardsCfg:
         },
     )
     track_ang_vel_z = RewTerm(
-        func=velocity_mdp.track_ang_vel_z_exp,
+        func=mdp.track_ang_vel_z_exp,
         weight=0.5,
         params={
             "command_name": "base_velocity",
