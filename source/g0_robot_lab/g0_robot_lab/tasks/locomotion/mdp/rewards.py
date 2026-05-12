@@ -245,7 +245,7 @@ def feet_gait(
     reward = torch.zeros(env.num_envs, dtype=torch.float, device=env.device)
     for i in range(len(sensor_cfg.body_ids)):
         is_stance = leg_phase[:, i] < threshold
-        reward += ~(is_stance ^ is_contact[:, i])
+        reward += (~(is_stance ^ is_contact[:, i])).float()
 
     if command_name is not None:
         cmd_norm = torch.norm(env.command_manager.get_command(command_name), dim=1)

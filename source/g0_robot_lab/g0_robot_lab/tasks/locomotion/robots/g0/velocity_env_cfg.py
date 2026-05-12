@@ -425,14 +425,14 @@ class RewardsCfg:
     )
 
     # -- other
-    # undesired_contacts = RewTerm(
-    #     func=mdp.undesired_contacts,
-    #     weight=-1,
-    #     params={
-    #         "threshold": 1,
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
-    #     },
-    # )
+    undesired_contacts = RewTerm(
+        func=mdp.undesired_contacts,
+        weight=-1,
+        params={
+            "threshold": 1,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
+        },
+    )
 
 @configclass
 class TerminationsCfg:
@@ -506,7 +506,7 @@ class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
         super().__post_init__()
         self.scene.num_envs = 32
 
-        if self.scene.terrain.generator is not None:
+        if self.scene.terrain.terrain.generator is not None:
             self.scene.terrain.terrain_generator.num_rows = 2
             self.scene.terrain.terrain_generator.num_cols = 10
 
