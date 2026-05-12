@@ -164,19 +164,19 @@ G0_DEFAULT_JOINT_POS = {
     "waist_roll_joint": 0.0,
 
     # left leg
-    "l_hip_pitch_joint": -0.12,
+    "l_hip_pitch_joint": -0.26,
     "l_hip_roll_joint": 0.0,
     "l_hip_yaw_joint": 0.0,
-    "l_knee_pitch_joint": -0.22,
-    "l_ankle_pitch_joint": 0.10,
+    "l_knee_pitch_joint": -0.44,
+    "l_ankle_pitch_joint": 0.18,
     "l_ankle_roll_joint": 0.0,
 
     # right leg
-    "r_hip_pitch_joint": 0.12,
+    "r_hip_pitch_joint": 0.26,
     "r_hip_roll_joint": 0.0,
     "r_hip_yaw_joint": 0.0,
-    "r_knee_pitch_joint": 0.22,
-    "r_ankle_pitch_joint": -0.10,
+    "r_knee_pitch_joint": 0.44,
+    "r_ankle_pitch_joint": -0.18,
     "r_ankle_roll_joint": 0.0,
 
     # left arm
