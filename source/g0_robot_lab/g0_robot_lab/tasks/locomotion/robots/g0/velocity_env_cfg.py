@@ -416,7 +416,7 @@ class RewardsCfg:
         params={
             "std": 0.05,
             "tanh_mult": 2.0,
-            "target_height": 0.02,
+            "target_height": 0.04,
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 body_names=G0_FOOT_BODY_NAMES
@@ -430,7 +430,10 @@ class RewardsCfg:
         weight=-1,
         params={
             "threshold": 1,
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces", 
+                body_names=["^(?!l_foot_link$|r_foot_link$).*$"],
+            ),
         },
     )
 
