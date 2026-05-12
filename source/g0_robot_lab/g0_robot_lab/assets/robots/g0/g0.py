@@ -156,27 +156,27 @@ G0_STANDARD_SERVO_JOINT_NAMES = [
 # First locomotion standing pose.
 # The sagittal leg signs are mirrored because the left/right pitch axes in the
 # G0 URDF are mirrored. These values describe the same physical pose on both
-# sides: a mild crouch with hip pitch carrying most of the sagittal balance and
-# ankle pitch kept close to neutral to avoid early ankle torque saturation.
+# sides. Keep these defaults at two-decimal precision so the standing baseline
+# does not depend on unrealistically fine deployment accuracy.
 G0_DEFAULT_JOINT_POS = {
     # waist
     "waist_yaw_joint": 0.0,
     "waist_roll_joint": 0.0,
 
     # left leg
-    "l_hip_pitch_joint": -0.21,
+    "l_hip_pitch_joint": -0.20,
     "l_hip_roll_joint": 0.0,
     "l_hip_yaw_joint": 0.0,
-    "l_knee_pitch_joint": -0.35,
-    "l_ankle_pitch_joint": 0.15,
+    "l_knee_pitch_joint": -0.34,
+    "l_ankle_pitch_joint": 0.14,
     "l_ankle_roll_joint": 0.0,
 
     # right leg
-    "r_hip_pitch_joint": 0.21,
+    "r_hip_pitch_joint": 0.20,
     "r_hip_roll_joint": 0.0,
     "r_hip_yaw_joint": 0.0,
-    "r_knee_pitch_joint": 0.35,
-    "r_ankle_pitch_joint": -0.15,
+    "r_knee_pitch_joint": 0.34,
+    "r_ankle_pitch_joint": -0.14,
     "r_ankle_roll_joint": 0.0,
 
     # left arm
@@ -221,8 +221,9 @@ G0_CFG = G0ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        # Initial estimate. Tune this after GUI checking foot-ground contact.
-        pos=(0.0, 0.0, 0.235),
+        # Matches the current standing pose foot mesh height closely enough to
+        # avoid a visible initial drop while keeping both feet in contact.
+        pos=(0.0, 0.0, 0.23),
         joint_pos=G0_DEFAULT_JOINT_POS,
         joint_vel={".*": 0.0},
     ),
@@ -238,10 +239,10 @@ G0_CFG = G0ArticulationCfg(
             effort_limit_sim=g0_actuators.STANDARD_SERVO_RATED_TORQUE,
             velocity_limit_sim=g0_actuators.STANDARD_SERVO_MAX_VELOCITY,
             stiffness={
-                ".*_hip_pitch_joint": 3.5,
-                ".*_hip_roll_joint": 3.5,
+                ".*_hip_pitch_joint": 6.0,
+                ".*_hip_roll_joint": 5.0,
                 ".*_hip_yaw_joint": 3.0,
-                ".*_ankle_roll_joint": 2.5,
+                ".*_ankle_roll_joint": 4.5,
                 "waist_yaw_joint": 2.0,
                 "waist_roll_joint": 2.0,
                 ".*_shoulder_pitch_joint": 1.5,
@@ -249,15 +250,15 @@ G0_CFG = G0ArticulationCfg(
                 ".*_shoulder_yaw_joint": 1.5,
             },
             damping={
-                ".*_hip_pitch_joint": 0.094,
-                ".*_hip_roll_joint": 0.094,
-                ".*_hip_yaw_joint": 0.087,
-                ".*_ankle_roll_joint": 0.079,
-                "waist_yaw_joint": 0.071,
-                "waist_roll_joint": 0.071,
-                ".*_shoulder_pitch_joint": 0.061,
-                ".*_shoulder_roll_joint": 0.061,
-                ".*_shoulder_yaw_joint": 0.061,
+                ".*_hip_pitch_joint": 0.18,
+                ".*_hip_roll_joint": 0.16,
+                ".*_hip_yaw_joint": 0.10,
+                ".*_ankle_roll_joint": 0.15,
+                "waist_yaw_joint": 0.08,
+                "waist_roll_joint": 0.08,
+                ".*_shoulder_pitch_joint": 0.06,
+                ".*_shoulder_roll_joint": 0.06,
+                ".*_shoulder_yaw_joint": 0.06,
             },
             armature=g0_actuators.STANDARD_SERVO_ARMATURE,
         ),
@@ -270,14 +271,14 @@ G0_CFG = G0ArticulationCfg(
             effort_limit_sim=g0_actuators.RIGHT_ANGLE_SERVO_RATED_TORQUE,
             velocity_limit_sim=g0_actuators.RIGHT_ANGLE_SERVO_MAX_VELOCITY,
             stiffness={
-                ".*_knee_pitch_joint": 4.5,
-                ".*_ankle_pitch_joint": 3.5,
+                ".*_knee_pitch_joint": 8.0,
+                ".*_ankle_pitch_joint": 6.5,
                 ".*_elbow_pitch_joint": 2.0,
             },
             damping={
-                ".*_knee_pitch_joint": 0.136,
-                ".*_ankle_pitch_joint": 0.120,
-                ".*_elbow_pitch_joint": 0.091,
+                ".*_knee_pitch_joint": 0.26,
+                ".*_ankle_pitch_joint": 0.22,
+                ".*_elbow_pitch_joint": 0.08,
             },
             armature=g0_actuators.RIGHT_ANGLE_SERVO_ARMATURE,
         ),

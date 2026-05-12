@@ -17,6 +17,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabPlayEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
     },
 )
