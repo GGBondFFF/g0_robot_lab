@@ -6,6 +6,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.utils import configclass
+from . import g0_actuators
 
 
 _G0_DIR = Path(__file__).resolve().parent
@@ -238,31 +239,31 @@ G0_CFG = G0ArticulationCfg(
         #   shoulder joints.
         "standard_servos": ImplicitActuatorCfg(
             joint_names_expr=G0_STANDARD_SERVO_JOINT_NAMES,
-            effort_limit_sim=0.5,
-            velocity_limit_sim=37.0,
+            effort_limit_sim=g0_actuators.STANDARD_SERVO_RATED_TORQUE,
+            velocity_limit_sim=g0_actuators.STANDARD_SERVO_MAX_VELOCITY,
             stiffness={
-                ".*_hip_pitch_joint": 80.0,
-                ".*_hip_roll_joint": 80.0,
-                ".*_hip_yaw_joint": 80.0,
-                ".*_ankle_roll_joint": 40.0,
-                "waist_yaw_joint": 60.0,
-                "waist_roll_joint": 40.0,
-                ".*_shoulder_pitch_joint": 40.0,
-                ".*_shoulder_roll_joint": 40.0,
-                ".*_shoulder_yaw_joint": 40.0,
+                ".*_hip_pitch_joint": 3.5,
+                ".*_hip_roll_joint": 3.5,
+                ".*_hip_yaw_joint": 3.0,
+                ".*_ankle_roll_joint": 2.5,
+                "waist_yaw_joint": 2.0,
+                "waist_roll_joint": 2.0,
+                ".*_shoulder_pitch_joint": 1.5,
+                ".*_shoulder_roll_joint": 1.5,
+                ".*_shoulder_yaw_joint": 1.5,
             },
             damping={
-                ".*_hip_pitch_joint": 2.0,
-                ".*_hip_roll_joint": 2.0,
-                ".*_hip_yaw_joint": 2.0,
-                ".*_ankle_roll_joint": 2.0,
-                "waist_yaw_joint": 3.0,
-                "waist_roll_joint": 3.0,
-                ".*_shoulder_pitch_joint": 1.0,
-                ".*_shoulder_roll_joint": 1.0,
-                ".*_shoulder_yaw_joint": 1.0,
+                ".*_hip_pitch_joint": 0.094,
+                ".*_hip_roll_joint": 0.094,
+                ".*_hip_yaw_joint": 0.087,
+                ".*_ankle_roll_joint": 0.079,
+                "waist_yaw_joint": 0.071,
+                "waist_roll_joint": 0.071,
+                ".*_shoulder_pitch_joint": 0.061,
+                ".*_shoulder_roll_joint": 0.061,
+                ".*_shoulder_yaw_joint": 0.061,
             },
-            armature=0.01,
+            armature=g0_actuators.STANDARD_SERVO_ARMATURE,
         ),
 
         # 6 right-angle servos.
@@ -270,19 +271,19 @@ G0_CFG = G0ArticulationCfg(
         #   elbows + knees + ankle_pitch joints.
         "right_angle_servos": ImplicitActuatorCfg(
             joint_names_expr=G0_RIGHT_ANGLE_SERVO_JOINT_NAMES,
-            effort_limit_sim=35.0,
-            velocity_limit_sim=30.0,
+            effort_limit_sim=g0_actuators.RIGHT_ANGLE_SERVO_RATED_TORQUE,
+            velocity_limit_sim=g0_actuators.RIGHT_ANGLE_SERVO_MAX_VELOCITY,
             stiffness={
-                ".*_knee_pitch_joint": 100.0,
-                ".*_ankle_pitch_joint": 60.0,
-                ".*_elbow_pitch_joint": 40.0,
+                ".*_knee_pitch_joint": 4.5,
+                ".*_ankle_pitch_joint": 3.5,
+                ".*_elbow_pitch_joint": 2.0,
             },
             damping={
-                ".*_knee_pitch_joint": 3.0,
-                ".*_ankle_pitch_joint": 2.0,
-                ".*_elbow_pitch_joint": 1.0,
+                ".*_knee_pitch_joint": 0.136,
+                ".*_ankle_pitch_joint": 0.120,
+                ".*_elbow_pitch_joint": 0.091,
             },
-            armature=0.01,
+            armature=g0_actuators.RIGHT_ANGLE_SERVO_ARMATURE,
         ),
     },
     joint_sdk_names=G0_JOINT_SDK_NAMES,
