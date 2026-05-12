@@ -154,33 +154,29 @@ G0_STANDARD_SERVO_JOINT_NAMES = [
 # -------------------------------------------------------------------------------
 
 # First locomotion standing pose.
-# This is adapted from the Unitree G1 style:
-#   hip pitch: slight forward bend
-#   knee pitch: slight bend
-#   ankle pitch: compensation
-#   shoulder/elbow: non-zero relaxed pose
-#
-# Important:
-# If the knees bend in the wrong direction in GUI, flip the sign of knee/ankle pitch.
+# The sagittal leg signs are mirrored because the left/right pitch axes in the
+# G0 URDF are mirrored. These values describe the same physical pose on both
+# sides: a mild crouch with hip pitch carrying most of the sagittal balance and
+# ankle pitch kept close to neutral to avoid early ankle torque saturation.
 G0_DEFAULT_JOINT_POS = {
     # waist
     "waist_yaw_joint": 0.0,
     "waist_roll_joint": 0.0,
 
     # left leg
-    "l_hip_pitch_joint": 0.0,
+    "l_hip_pitch_joint": -0.12,
     "l_hip_roll_joint": 0.0,
     "l_hip_yaw_joint": 0.0,
-    "l_knee_pitch_joint": -0.30,
-    "l_ankle_pitch_joint": 0.30,
+    "l_knee_pitch_joint": -0.22,
+    "l_ankle_pitch_joint": 0.10,
     "l_ankle_roll_joint": 0.0,
 
     # right leg
-    "r_hip_pitch_joint": 0.0,
+    "r_hip_pitch_joint": 0.12,
     "r_hip_roll_joint": 0.0,
     "r_hip_yaw_joint": 0.0,
-    "r_knee_pitch_joint": 0.30,
-    "r_ankle_pitch_joint": -0.30,
+    "r_knee_pitch_joint": 0.22,
+    "r_ankle_pitch_joint": -0.10,
     "r_ankle_roll_joint": 0.0,
 
     # left arm
