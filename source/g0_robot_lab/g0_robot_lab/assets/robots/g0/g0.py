@@ -239,8 +239,8 @@ G0_CFG = G0ArticulationCfg(
             effort_limit_sim=g0_actuators.STANDARD_SERVO_RATED_TORQUE,
             velocity_limit_sim=g0_actuators.STANDARD_SERVO_MAX_VELOCITY,
             stiffness={
-                ".*_hip_pitch_joint": 6.0,
-                ".*_hip_roll_joint": 5.0,
+                ".*_hip_pitch_joint": 4.0,
+                ".*_hip_roll_joint": 4.0,
                 ".*_hip_yaw_joint": 3.0,
                 ".*_ankle_roll_joint": 4.5,
                 "waist_yaw_joint": 2.0,
@@ -271,8 +271,8 @@ G0_CFG = G0ArticulationCfg(
             effort_limit_sim=g0_actuators.RIGHT_ANGLE_SERVO_RATED_TORQUE,
             velocity_limit_sim=g0_actuators.RIGHT_ANGLE_SERVO_MAX_VELOCITY,
             stiffness={
-                ".*_knee_pitch_joint": 8.0,
-                ".*_ankle_pitch_joint": 6.5,
+                ".*_knee_pitch_joint": 4.0,
+                ".*_ankle_pitch_joint": 4.0,
                 ".*_elbow_pitch_joint": 2.0,
             },
             damping={
