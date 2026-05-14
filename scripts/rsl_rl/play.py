@@ -94,6 +94,44 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 import g0_robot_lab.tasks  # noqa: F401
 
 
+def _migrate_scalar_std_checkpoint_for_log_std(loaded_dict: dict) -> bool:
+    """Convert older RSL-RL scalar std checkpoints to log-std checkpoints in memory."""
+    actor_state_dict = loaded_dict.get("actor_state_dict", {})
+    scalar_key = "distribution.std_param"
+    log_key = "distribution.log_std_param"
+    if scalar_key not in actor_state_dict or log_key in actor_state_dict:
+        return False
+    std = actor_state_dict.pop(scalar_key).detach().clone().float().clamp_min(1.0e-4)
+    actor_state_dict[log_key] = torch.log(std)
+    return True
+
+
+def _load_policy_checkpoint(runner: OnPolicyRunner | DistillationRunner, resume_path: str):
+    """Load checkpoints across G0 PPO distribution/normalization config migrations."""
+    try:
+        return runner.load(resume_path)
+    except RuntimeError as exc:
+        print("[WARN]: Strict checkpoint load failed. Trying actor/critic-only migration for play/export.")
+        print(f"[WARN]: Original load error: {exc}")
+    loaded_dict = torch.load(resume_path, weights_only=False, map_location=runner.device)
+    migrated_std = _migrate_scalar_std_checkpoint_for_log_std(loaded_dict)
+    load_cfg = {
+        "actor": True,
+        "critic": True,
+        "optimizer": False,
+        "iteration": True,
+        "rnd": False,
+    }
+    runner.alg.load(loaded_dict, load_cfg=load_cfg, strict=False)
+    if load_cfg["iteration"] and "iter" in loaded_dict:
+        runner.current_learning_iteration = loaded_dict["iter"]
+    print(
+        "[INFO]: Loaded actor/critic from checkpoint for play/export"
+        f" (iteration={runner.current_learning_iteration}, migrated_scalar_std={migrated_std})."
+    )
+    return loaded_dict.get("infos")
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     """Play with RSL-RL agent."""
@@ -162,7 +200,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
-    runner.load(resume_path)
+    _load_policy_checkpoint(runner, resume_path)
 
     # obtain the trained policy for inference
     policy = runner.get_inference_policy(device=env.unwrapped.device)

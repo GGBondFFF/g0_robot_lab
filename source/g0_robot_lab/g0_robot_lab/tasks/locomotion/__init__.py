@@ -21,3 +21,36 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
     },
 )
+
+gym.register(
+    id="G0-Velocity-Stage1-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabStage1EnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="G0-Velocity-Stage2-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabStage2EnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="G0-Velocity-Stage3-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabStage3EnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.robots.g0.velocity_env_cfg:G0RobotLabPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
+    },
+)

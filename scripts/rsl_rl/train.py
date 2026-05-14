@@ -28,6 +28,15 @@ parser.add_argument(
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
+    "--g0_actor_critic_resume_only",
+    action="store_true",
+    default=False,
+    help=(
+        "Load only actor/critic weights when resuming G0 training. This resets the optimizer and is useful when "
+        "changing PPO numerics, observation normalization, or distribution parameterization."
+    ),
+)
+parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 parser.add_argument("--export_io_descriptors", action="store_true", default=False, help="Export IO descriptors.")
@@ -109,6 +118,46 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+
+def _migrate_scalar_std_checkpoint_for_log_std(loaded_dict: dict) -> bool:
+    """Convert older RSL-RL scalar std checkpoints to log-std checkpoints in memory."""
+    actor_state_dict = loaded_dict.get("actor_state_dict", {})
+    scalar_key = "distribution.std_param"
+    log_key = "distribution.log_std_param"
+    if scalar_key not in actor_state_dict or log_key in actor_state_dict:
+        return False
+    std = actor_state_dict.pop(scalar_key).detach().clone().float().clamp_min(1.0e-4)
+    actor_state_dict[log_key] = torch.log(std)
+    return True
+
+
+def _load_resume_checkpoint(runner: OnPolicyRunner | DistillationRunner, resume_path: str, actor_critic_only: bool):
+    """Load a checkpoint, with a G0-safe fallback for PPO numeric configuration migrations."""
+    if not actor_critic_only:
+        try:
+            return runner.load(resume_path)
+        except RuntimeError as exc:
+            print("[WARN]: Strict checkpoint load failed. Trying actor/critic-only migration.")
+            print(f"[WARN]: Original load error: {exc}")
+
+    loaded_dict = torch.load(resume_path, weights_only=False, map_location=runner.device)
+    migrated_std = _migrate_scalar_std_checkpoint_for_log_std(loaded_dict)
+    load_cfg = {
+        "actor": True,
+        "critic": True,
+        "optimizer": False,
+        "iteration": True,
+        "rnd": False,
+    }
+    runner.alg.load(loaded_dict, load_cfg=load_cfg, strict=False)
+    if load_cfg["iteration"] and "iter" in loaded_dict:
+        runner.current_learning_iteration = loaded_dict["iter"]
+    print(
+        "[INFO]: Loaded actor/critic from checkpoint with optimizer reset"
+        f" (iteration={runner.current_learning_iteration}, migrated_scalar_std={migrated_std})."
+    )
+    return loaded_dict.get("infos")
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -210,7 +259,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
-        runner.load(resume_path)
+        _load_resume_checkpoint(runner, resume_path, args_cli.g0_actor_critic_resume_only)
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)

@@ -30,7 +30,7 @@ from g0_robot_lab.tasks.locomotion import mdp
 
 from g0_robot_lab.assets.robots.g0 import (
     G0_ARM_JOINT_NAMES,
-    G0_CFG, 
+    G0_CFG,
     G0_JOINT_SDK_NAMES,
     G0_WAIST_JOINT_NAMES,
 )  # isort:skip
@@ -56,6 +56,27 @@ G0_FLAT_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
     use_cache=False,
     sub_terrains={
         "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.5),
+    },
+)
+
+G0_LIGHT_UNEVEN_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
+    size=(8.0, 8.0),
+    border_width=20.0,
+    num_rows=5,
+    num_cols=9,
+    horizontal_scale=0.1,
+    vertical_scale=0.002,
+    slope_threshold=0.75,
+    difficulty_range=(0.0, 0.35),
+    use_cache=False,
+    sub_terrains={
+        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.7),
+        "light_uniform": terrain_gen.HfRandomUniformTerrainCfg(
+            proportion=0.3,
+            noise_range=(-0.006, 0.006),
+            noise_step=0.002,
+            downsampled_scale=0.25,
+        ),
     },
 )
 
@@ -115,7 +136,7 @@ class G0RobotLabSceneCfg(InteractiveSceneCfg):
 
 @configclass
 class EventCfg:
-    """ Configuration for events."""
+    """Stage-0 events: reproduce the model_9200 flat-ground baseline."""
 
     # startup
     physics_material = EventTerm(
@@ -128,21 +149,22 @@ class EventCfg:
              "static_friction_range": (0.8, 1.0),
              "dynamic_friction_range": (0.8, 1.0),
             "restitution_range": (0.0, 0.0),
-            # "num_buckets": 64,
             "num_buckets": 32,
+            "make_consistent": True,
         },
     )
-    # Keep base mass randomization disable at beginning.
-    # Enable it after robot can stand and walk on flat ground.
-    # add_base_mass = EventTerm(
-    #     func=mdp.randomize_rigid_body_mass,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "mass_distribution_params": (-0.2, 0.5),
-    #         "operation": "add",
-    #     },
-    # )
+
+    body_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base_link", "torso_link"]),
+            "mass_distribution_params": (1.0, 1.0),
+            "operation": "scale",
+            "distribution": "uniform",
+            "recompute_inertia": True,
+        },
+    )
 
     # reset
     base_external_force_torque = EventTerm(
@@ -178,24 +200,101 @@ class EventCfg:
     )
 
     reset_robot_joints = EventTerm(
-        func=mdp.reset_joints_by_scale,
+        func=mdp.reset_joints_by_group_offsets,
         mode="reset",
         params={
-            "position_range": (1.0, 1.0),
-            "velocity_range": (-0.2, 0.2),
+            "joint_position_ranges": {".*": (0.0, 0.0)},
+            "joint_velocity_ranges": {".*": (0.0, 0.0)},
         },
     )
 
-    # Push is useful later, but it can make first-stage debugging harder.
-    # Enable only after default standing and low-speed walking are stable.
-    # push_robot = EventTerm(
-    #     func=mdp.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(5.0, 5.0),
-    #     params={"velocity_range": {
-    #         "x": (-0.5, 0.5),
-    #         "y": (-0.5, 0.5)}},
-    # )
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(8.0, 12.0),
+        params={
+            "velocity_range": {
+                "x": (-0.0, 0.0),
+                "y": (-0.0, 0.0),
+            }
+        },
+    )
+
+
+@configclass
+class Stage1EventCfg(EventCfg):
+    """Normal flat-ground deployment randomization."""
+
+    physics_material = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.5, 1.2),
+            "dynamic_friction_range": (0.5, 1.2),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 48,
+            "make_consistent": True,
+        },
+    )
+    body_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base_link", "torso_link"]),
+            "mass_distribution_params": (0.95, 1.05),
+            "operation": "scale",
+            "distribution": "uniform",
+            "recompute_inertia": True,
+        },
+    )
+    reset_base = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.2, 0.2), "y": (-0.2, 0.2), "yaw": (-0.5, 0.5)},
+            "velocity_range": {
+                "x": (-0.05, 0.05),
+                "y": (-0.05, 0.05),
+                "z": (0.0, 0.0),
+                "roll": (-0.05, 0.05),
+                "pitch": (-0.05, 0.05),
+                "yaw": (-0.05, 0.05),
+            },
+        },
+    )
+    reset_robot_joints = EventTerm(
+        func=mdp.reset_joints_by_group_offsets,
+        mode="reset",
+        params={
+            "joint_position_ranges": {".*": (-0.04, 0.04)},
+            "joint_velocity_ranges": {".*": (-0.30, 0.30)},
+        },
+    )
+
+
+@configclass
+class Stage2EventCfg(Stage1EventCfg):
+    """Stage 1 plus small velocity pushes."""
+
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(8.0, 12.0),
+        params={"velocity_range": {"x": (-0.10, 0.10), "y": (-0.10, 0.10)}},
+    )
+
+
+@configclass
+class Stage3EventCfg(Stage2EventCfg):
+    """Stage 2 events; terrain is enabled by the env cfg below."""
+
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(6.0, 10.0),
+        params={"velocity_range": {"x": (-0.20, 0.20), "y": (-0.20, 0.20)}},
+    )
 
 ##
 # Commands settings
@@ -210,16 +309,16 @@ class CommandsCfg:
         rel_standing_envs=0.02,
         rel_heading_envs=1.0,
         heading_command=False,
-        debug_vis=False,
+        debug_vis=True,
         ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
             lin_vel_x=(-0.1, 0.1),
             lin_vel_y=(-0.1, 0.1),
             ang_vel_z=(-0.1, 0.1)
         ),
         limit_ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.0),
-            lin_vel_y=(-0.3, 0.3),
-            ang_vel_z=(-0.2, 0.2)
+            lin_vel_x=(-0.2, 0.5),
+            lin_vel_y=(-0.15, 0.15),
+            ang_vel_z=(-0.15, 0.15)
         ),
     )  
 
@@ -271,7 +370,7 @@ class ObservationsCfg:
             noise=Unoise(n_min=-1.5, n_max=1.5)
         )
         last_action = ObsTerm(func=mdp.last_action)
-        # gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
+        gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
 
         def __post_init__(self):
             self.history_length = 5
@@ -293,7 +392,7 @@ class ObservationsCfg:
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05)
         last_action = ObsTerm(func=mdp.last_action)
-        # gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
+        gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
         # height_scanner = ObsTerm(func=mdp.height_scan,
         #     params={"sensor_cfg": SceneEntityCfg("height_scanner")},
         #     clip=(-1.0, 5.0),
@@ -334,7 +433,7 @@ class RewardsCfg:
     base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
     joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.002)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     # gpt do not show it
     energy = RewTerm(func=mdp.energy, weight=-2e-5)
@@ -411,14 +510,19 @@ class RewardsCfg:
         },
     )
     feet_clearance = RewTerm(
-        func=mdp.foot_clearance_reward,
-        weight=1.0,
+        func=mdp.swing_foot_clearance_reward,
+        weight=0.25,
         params={
-            "std": 0.05,
+            "std": 0.01,
             "tanh_mult": 2.0,
             "target_height": 0.04,
+            "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg(
                 "robot",
+                body_names=G0_FOOT_BODY_NAMES
+            ),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
                 body_names=G0_FOOT_BODY_NAMES
             ),
         },
@@ -444,11 +548,11 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_height = DoneTerm(
         func=mdp.root_height_below_minimum,
-        params={"minimum_height": 0.12},
+        params={"minimum_height": 0.16},
     )
     bad_orientation = DoneTerm(
         func=mdp.bad_orientation,
-        params={"limit_angle": 1.2},
+        params={"limit_angle": 0.8},
     )
 
 @configclass
@@ -458,6 +562,14 @@ class CurriculumCfg:
     # terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
     ang_vel_cmd_levels = CurrTerm(mdp.ang_vel_cmd_levels)
+    event_levels = CurrTerm(mdp.event_levels)
+
+
+@configclass
+class Stage3CurriculumCfg(CurriculumCfg):
+    """Add terrain curriculum only after the flat-ground stages are stable."""
+
+    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     # pass
 ##
 # Environment configuration
@@ -504,6 +616,34 @@ class G0RobotLabEnvCfg(ManagerBasedRLEnvCfg):
                 if self.scene.terrain.terrain_generator is not None:
                     self.scene.terrain.terrain_generator.curriculum = False
 
+
+@configclass
+class G0RobotLabStage1EnvCfg(G0RobotLabEnvCfg):
+    """Flat-ground sim2real randomization after the Stage-0 numeric fix."""
+
+    events: Stage1EventCfg = Stage1EventCfg()
+
+
+@configclass
+class G0RobotLabStage2EnvCfg(G0RobotLabStage1EnvCfg):
+    """Stage 1 plus small push perturbations."""
+
+    events: Stage2EventCfg = Stage2EventCfg()
+
+
+@configclass
+class G0RobotLabStage3EnvCfg(G0RobotLabStage2EnvCfg):
+    """Stage 2 plus very light uneven terrain."""
+
+    events: Stage3EventCfg = Stage3EventCfg()
+    curriculum: Stage3CurriculumCfg = Stage3CurriculumCfg()
+
+    def __post_init__(self):
+        self.scene.terrain.terrain_type = "generator"
+        self.scene.terrain.terrain_generator = G0_LIGHT_UNEVEN_TERRAIN_CFG
+        self.scene.terrain.max_init_terrain_level = 1
+        super().__post_init__()
+
 @configclass
 class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
     def __post_init__(self):
@@ -515,3 +655,6 @@ class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
             self.scene.terrain.terrain_generator.num_cols = 10
 
         self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
+        # self.commands.base_velocity.ranges.lin_vel_x = (1.5, 1.5)
+        # self.commands.base_velocity.ranges.lin_vel_y = (0.5, 0.5)
+        # self.commands.base_velocity.ranges.ang_vel_z = (0.2, 0.2)

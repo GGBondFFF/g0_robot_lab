@@ -171,6 +171,42 @@ def foot_clearance_reward(
     return torch.exp(-torch.sum(reward, dim=1) / std)
 
 
+def swing_foot_clearance_reward(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    command_name: str,
+    target_height: float,
+    std: float,
+    tanh_mult: float,
+    contact_threshold: float = 1.0,
+) -> torch.Tensor:
+    """Reward only swing feet for staying near a modest clearance target.
+
+    The older clearance term returned a positive reward even when both feet were in
+    stance, which can make the term behave like a constant offset and obscure
+    whether the swing trajectory is useful. This version gates the term by
+    contact state, horizontal foot speed, and non-zero command.
+    """
+
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    in_contact = contact_forces.norm(dim=-1).max(dim=1)[0] > contact_threshold
+    swing_mask = ~in_contact
+
+    foot_height = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]
+    height_reward = torch.exp(-torch.square(foot_height - target_height) / std)
+    foot_speed_gate = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
+
+    cmd_norm = torch.norm(env.command_manager.get_command(command_name), dim=1, keepdim=True)
+    moving = cmd_norm > 0.1
+
+    reward = height_reward * foot_speed_gate * swing_mask.float() * moving.float()
+    return torch.mean(reward, dim=1)
+
+
 def feet_too_near(
     env: ManagerBasedRLEnv,
     threshold: float = 0.2,
