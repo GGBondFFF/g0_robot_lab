@@ -13,6 +13,10 @@ This directory is the MuJoCo side of the Isaac Lab to MuJoCo sim2sim workflow.
 
 It is not a final dynamics model. Do not treat its rollout as hardware evidence.
 
+As of the first sim2sim validation pass, `g0.xml` loads successfully with the DeepMind MuJoCo Python API (`mujoco==3.8.1`) and exposes all 22 expected G0 SDK joints. The placeholder body layout was changed to a simple nested chain because MuJoCo does not allow a freejoint plus all hinge joints on the same body.
+
+That change is only for interface validation. The nested chain is not the real G0 kinematic tree.
+
 ## What Still Needs To Be Converted Or Calibrated
 
 The following must be aligned with Isaac Lab before policy behavior is meaningful:
@@ -29,6 +33,8 @@ The following must be aligned with Isaac Lab before policy behavior is meaningfu
 - contact patch
 - friction
 - root frame convention
+
+Current zero-action rollout validates the action bridge and file pipeline, but joint/root motion differences against Isaac Lab are expected until these physical parameters are replaced.
 
 ## Suggested Future Workflow
 

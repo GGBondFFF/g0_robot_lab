@@ -25,6 +25,13 @@ If ordinary Python cannot import the project package, run through Isaac Lab:
 
 If MuJoCo is not installed, the XML load check is skipped with a warning.
 
+After installing DeepMind MuJoCo in the `g0_isaaclab` environment, the expected validation summary is:
+
+```text
+OK: MuJoCo model has all 22 joints
+Summary: OK
+```
+
 ## Dump Isaac Golden I/O
 
 Zero-action dump:
@@ -89,10 +96,35 @@ python scripts/sim2sim/compare_isaac_mujoco_rollout.py \
   --output logs/sim2sim/compare_report.md
 ```
 
+First zero-action validation command set:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/play_mujoco_g0.py \
+  --model mujoco/g0.xml \
+  --steps 100 \
+  --command 0.0 0.0 0.0 \
+  --zero-action \
+  --record-rollout logs/sim2sim/mujoco_zero_action_rollout.npz
+
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/dump_isaac_golden_io.py \
+  --task G0-Velocity-v0 \
+  --steps 100 \
+  --num_envs 1 \
+  --output logs/sim2sim/isaac_zero_action_golden_io.npz \
+  --zero-action \
+  --headless
+
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_isaac_mujoco_rollout.py \
+  --isaac logs/sim2sim/isaac_zero_action_golden_io.npz \
+  --mujoco logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/compare_zero_action_report.md
+```
+
+Expected zero-action interface result: `action` and `target_joint_pos` compare with zero error. Joint/root state differences are expected while `mujoco/g0.xml` remains a placeholder model.
+
 ## Current TODOs
 
 - Replace placeholder `mujoco/g0.xml` with a full URDF/MJCF-derived model.
 - Verify projected gravity frame against Isaac Lab.
 - Verify base angular velocity frame and scaling against Isaac Lab.
 - Align actuator PD, torque limits, velocity limits, contact, and friction.
-

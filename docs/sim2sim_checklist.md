@@ -1,18 +1,18 @@
 # G0 Sim2sim Checklist
 
-- [ ] `main` baseline train/play is runnable
-- [ ] work is on `structure/mujoco-sim2sim-layout`
-- [ ] `policy.pt` exported from Isaac Lab `play.py`
-- [ ] Isaac golden I/O dumped with `dump_isaac_golden_io.py`
-- [ ] MuJoCo model loads
-- [ ] 22 joints found in MuJoCo
-- [ ] joint order matches `G0_JOINT_SDK_NAMES`
-- [ ] default pose matches `G0_DEFAULT_JOINT_POS`
-- [ ] zero action gives default pose
-- [ ] all-one action gives `default + 0.12`
-- [ ] all-negative-one action gives `default - 0.12`
-- [ ] action clipping verified
-- [ ] first-frame observation compared
+- [x] `main` baseline train/play is runnable
+- [x] work is on `structure/mujoco-sim2sim-layout`
+- [x] `policy.pt` exported from Isaac Lab `play.py`
+- [x] Isaac golden I/O dumped with `dump_isaac_golden_io.py`
+- [x] MuJoCo model loads
+- [x] 22 joints found in MuJoCo
+- [x] joint order matches `G0_JOINT_SDK_NAMES`
+- [x] default pose matches `G0_DEFAULT_JOINT_POS`
+- [x] zero action gives default pose
+- [x] all-one action gives `default + 0.12`
+- [x] all-negative-one action gives `default - 0.12`
+- [x] action clipping verified
+- [ ] first-frame observation compared term by term
 - [ ] `projected_gravity` frame convention verified
 - [ ] `base_ang_vel` frame convention verified
 - [ ] control dt and decimation match Isaac Lab
@@ -20,6 +20,5 @@
 - [ ] torque and velocity limits aligned
 - [ ] foot contact geometry aligned
 - [ ] friction aligned
-- [ ] short rollout compared
-- [ ] failure causes documented
-
+- [x] short rollout compared
+- [x] failure causes documented
