@@ -65,6 +65,40 @@ def scalar_max(array: np.ndarray) -> float:
     return float(np.nanmax(np.abs(array)))
 
 
+def scalar_min(array: np.ndarray) -> float:
+    if array.size == 0:
+        return float("nan")
+    return float(np.nanmin(array))
+
+
+def scalar_mean(array: np.ndarray) -> float:
+    if array.size == 0:
+        return float("nan")
+    return float(np.nanmean(array))
+
+
+def scalar_last(array: np.ndarray) -> float:
+    if array.size == 0:
+        return float("nan")
+    return float(np.asarray(array).reshape(-1)[-1])
+
+
+def scalar_ratio(mask: np.ndarray) -> float:
+    if mask.size == 0:
+        return float("nan")
+    return float(np.count_nonzero(mask) / mask.size)
+
+
+def decode_scalar(value: Any, default: str = "") -> str:
+    try:
+        array = np.asarray(value)
+        if array.shape == ():
+            return str(array.item())
+        return str(array.reshape(-1)[0])
+    except Exception:
+        return default
+
+
 def main() -> int:
     args = parse_args()
     deploy_cfg = load_yaml(args.deploy_cfg)
@@ -110,6 +144,9 @@ def main() -> int:
         "joint_pos",
         "joint_vel",
         "root_height",
+        "root_quat",
+        "base_ang_vel",
+        "projected_gravity",
         "command",
         "contact_count",
         "foot_ground_contact_count",
@@ -184,17 +221,72 @@ def main() -> int:
     command_constant = scalar_max(command - command[0:1])
     lines.append(f"- command constant max abs diff: `{command_constant:.6g}`")
 
+    all_finite = True
     for key in required:
-        finite_check(key, np.asarray(data[key]), failures, lines)
+        array = np.asarray(data[key])
+        all_finite = all_finite and bool(np.all(np.isfinite(array)))
+        finite_check(key, array, failures, lines)
 
+    policy_action = np.asarray(data["policy_action"], dtype=np.float64)
+    target_joint_pos = np.asarray(data["target_joint_pos"], dtype=np.float64)
+    joint_pos = np.asarray(data["joint_pos"], dtype=np.float64)
+    joint_vel = np.asarray(data["joint_vel"], dtype=np.float64)
+    pd_tau_cmd = np.asarray(data["pd_tau_cmd"], dtype=np.float64)
+    root_quat = np.asarray(data["root_quat"], dtype=np.float64)
+    base_ang_vel = np.asarray(data["base_ang_vel"], dtype=np.float64)
+    projected_gravity = np.asarray(data["projected_gravity"], dtype=np.float64)
     root_height = np.asarray(data["root_height"], dtype=np.float64)
     contact_count = np.asarray(data["contact_count"], dtype=np.float64)
     foot_force = np.asarray(data["foot_contact_force_norm"], dtype=np.float64)
+    velocity_exceeded_mask = np.any(np.abs(joint_vel) > velocity_limit[None, :] + 1e-9, axis=0)
+    velocity_exceeded_joints = [name for name, exceeded in zip(joint_names, velocity_exceeded_mask, strict=True) if exceeded]
+    torque_saturation_mask = np.abs(pd_tau_cmd) > effort_limit[None, :] + 1e-9
+    action_saturation_ratio = scalar_ratio(np.abs(policy_action) >= 1.0 - 1e-6)
+    torque_saturation_ratio = scalar_ratio(torque_saturation_mask)
+    early_fall_threshold = 0.12
+    early_fall = bool(np.nanmin(root_height) < early_fall_threshold)
+    control_mode = decode_scalar(data["control_mode"] if "control_mode" in data else "", "unknown")
+    command_first = np.asarray(command[0], dtype=np.float64) if command.size else np.zeros(3, dtype=np.float64)
+
     lines.append("")
     lines.append("## Ranges")
     lines.append(f"- root_height min/max: `{np.nanmin(root_height):.6g}` / `{np.nanmax(root_height):.6g}`")
     lines.append(f"- contact_count min/max: `{np.nanmin(contact_count):.6g}` / `{np.nanmax(contact_count):.6g}`")
     lines.append(f"- foot_contact_force_norm min/max: `{np.nanmin(foot_force):.6g}` / `{np.nanmax(foot_force):.6g}`")
+
+    lines.append("")
+    lines.append("## Diagnostic Metrics")
+    lines.append(f"- mode: `{control_mode}`")
+    lines.append(f"- command: `{command_first.tolist()}`")
+    lines.append(f"- action max abs: `{scalar_max(policy_action):.6g}`")
+    lines.append(f"- action saturation ratio: `{action_saturation_ratio:.6g}`")
+    lines.append(f"- target_joint_pos min/max: `{scalar_min(target_joint_pos):.6g}` / `{np.nanmax(target_joint_pos):.6g}`")
+    lines.append(f"- joint_pos min/max: `{scalar_min(joint_pos):.6g}` / `{np.nanmax(joint_pos):.6g}`")
+    lines.append(f"- joint_vel max abs: `{scalar_max(joint_vel):.6g}`")
+    lines.append(f"- velocity-limit exceeded joints: `{int(np.count_nonzero(velocity_exceeded_mask))}/{action_dim}`")
+    lines.append(f"- velocity-limit exceeded joint names: `{velocity_exceeded_joints}`")
+    lines.append(f"- pd_tau_cmd max abs: `{scalar_max(pd_tau_cmd):.6g}`")
+    lines.append(f"- torque saturation ratio: `{torque_saturation_ratio:.6g}`")
+    lines.append(
+        f"- root_height min/max/final: `{scalar_min(root_height):.6g}` / "
+        f"`{np.nanmax(root_height):.6g}` / `{scalar_last(root_height):.6g}`"
+    )
+    lines.append(f"- root_quat finite: `{bool(np.all(np.isfinite(root_quat)))}`")
+    lines.append(f"- base_ang_vel max abs: `{scalar_max(base_ang_vel):.6g}`")
+    lines.append(f"- projected_gravity finite: `{bool(np.all(np.isfinite(projected_gravity)))}`")
+    lines.append(
+        f"- contact_count min/mean/max: `{scalar_min(contact_count):.6g}` / "
+        f"`{scalar_mean(contact_count):.6g}` / `{np.nanmax(contact_count):.6g}`"
+    )
+    lines.append(
+        f"- foot_contact_force_norm min/mean/max: `{scalar_min(foot_force):.6g}` / "
+        f"`{scalar_mean(foot_force):.6g}` / `{np.nanmax(foot_force):.6g}`"
+    )
+    lines.append(f"- NaN/Inf present: `{not all_finite}`")
+    lines.append(f"- early fall heuristic root_height < {early_fall_threshold}: `{early_fall}`")
+
+    if not all_finite:
+        failures.append("rollout contains NaN or Inf")
 
     is_zero_action = scalar_max(data["policy_action"]) < 1e-8
     lines.append("")

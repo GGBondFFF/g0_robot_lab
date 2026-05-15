@@ -337,6 +337,65 @@ with `tau_ff = 0`. Raw `tau_cmd` can exceed `effort_limit_sim`; `pd_tau_cmd_clip
 
 This is now a deploy-style MuJoCo sim2sim validation entrypoint. It is still not a Unitree DDS/C++ ONNX deployment stack.
 
+## Deploy Validation Matrix
+
+The first deploy-style validation matrix has been added and run.
+
+Command:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validation_matrix.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --steps 200 \
+  --output-dir logs/sim2sim/g0_deploy/validation_matrix
+```
+
+Result:
+
+```text
+Validation matrix OK: 16/16 cases OK
+```
+
+Coverage:
+
+```text
+action kind: zero-action, policy
+control mode: position, pd_torque
+commands:
+  [0.0, 0.0, 0.0]
+  [0.05, 0.0, 0.0]
+  [0.1, 0.0, 0.0]
+  [0.0, 0.0, 0.1]
+```
+
+Summary:
+
+- All 16 rollouts completed and passed `check_g0_deploy_rollout.py`.
+- Checker now reports action saturation, torque saturation, velocity-limit exceedance, root height min/max/final, finite root/quaternion/gravity diagnostics, contact count, foot force ranges, and early-fall heuristic.
+- Zero-action cases all fell below the `root_height < 0.12` heuristic. This is a default-pose/contact/dynamics signal, not a policy failure.
+- Policy cases stayed above the fall threshold for 200 steps.
+- Policy action saturation is present. The highest matrix value was `0.1705` in `policy_position_c0p1_c0_c0`.
+- Raw PD torque saturation is present but low. The highest matrix value was `0.0125` in `policy_position_c0p1_c0_c0`.
+- No case exceeded `velocity_limit_sim`.
+- Foot contact force maxima ranged from about `13.6` in zero-action cases to about `21.3` in policy cases.
+
+Primary report:
+
+```text
+docs/g0_deploy_sim2sim_validation_matrix_report.md
+```
+
+Generated artifacts:
+
+```text
+logs/sim2sim/g0_deploy/validation_matrix/*.npz
+logs/sim2sim/g0_deploy/validation_matrix/*_check.md
+logs/sim2sim/g0_deploy/validation_matrix/*_run.log
+logs/sim2sim/g0_deploy/validation_matrix/validation_matrix_summary.md
+```
+
 - sim2sim framework files are present.
 - `G0_JOINT_SDK_NAMES` dimension is 22.
 - default joint position dimension is 22.

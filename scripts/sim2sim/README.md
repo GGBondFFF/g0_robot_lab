@@ -20,6 +20,7 @@ This directory contains the Isaac Lab to MuJoCo sim2sim validation scaffold for 
 - `export_g0_deploy_cfg.py`: exports a Unitree-style `deploy.yaml` from the Isaac Lab G0 env.
 - `run_g0_mujoco_deploy.py`: deploy-style MuJoCo runner that records LowCmd-like PD fields.
 - `check_g0_deploy_rollout.py`: checks deploy rollout shape, action processing, PD command clipping, and zero-action metrics.
+- `run_g0_deploy_validation_matrix.py`: runs the deploy matrix over zero-action/policy, position/pd_torque, and fixed velocity commands.
 - `validate_sim2sim_setup.py`: quick structure and interface validator.
 
 ## Validate Setup
@@ -244,6 +245,37 @@ tau_cmd = tau_ff + kp * (q_des - q) + kd * (dq_des - dq)
 ```
 
 with `tau_ff = 0` and effort-limit clipping. The formal `mujoco/g0.xml` and foot mesh collision are not modified.
+
+Run the deploy validation matrix:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validation_matrix.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --steps 200 \
+  --output-dir logs/sim2sim/g0_deploy/validation_matrix
+```
+
+The matrix writes:
+
+```text
+logs/sim2sim/g0_deploy/validation_matrix/<case>.npz
+logs/sim2sim/g0_deploy/validation_matrix/<case>_check.md
+logs/sim2sim/g0_deploy/validation_matrix/<case>_run.log
+logs/sim2sim/g0_deploy/validation_matrix/validation_matrix_summary.md
+docs/g0_deploy_sim2sim_validation_matrix_report.md
+```
+
+The current 16-case matrix result is:
+
+```text
+16/16 runner OK
+16/16 checker OK
+0/16 velocity-limit exceeded
+zero-action cases: early-fall heuristic true
+policy cases: early-fall heuristic false
+```
 
 ## Compare Rollouts
 

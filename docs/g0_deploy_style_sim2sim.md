@@ -154,6 +154,48 @@ Policy rollout:
 - PD torque mode: completed 200 deploy steps and check OK.
 - This validates startup and command recording, not walking quality.
 
+## Validation Matrix
+
+The deploy validation matrix runs all combinations of:
+
+- zero-action and policy rollout
+- position and pd_torque control mode
+- commands `[0.0, 0.0, 0.0]`, `[0.05, 0.0, 0.0]`, `[0.1, 0.0, 0.0]`, `[0.0, 0.0, 0.1]`
+
+Command:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validation_matrix.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --steps 200 \
+  --output-dir logs/sim2sim/g0_deploy/validation_matrix
+```
+
+Latest result:
+
+```text
+Validation matrix OK: 16/16 cases OK
+```
+
+Summary report:
+
+```text
+docs/g0_deploy_sim2sim_validation_matrix_report.md
+logs/sim2sim/g0_deploy/validation_matrix/validation_matrix_summary.md
+```
+
+Main signals:
+
+- All 16 rollouts ran and passed checker.
+- All zero-action cases tripped the early-fall heuristic, with root height dropping below `0.12`.
+- All policy cases stayed above the fall threshold for 200 steps.
+- Policy action saturation is present, with the highest case at command `[0.1, 0.0, 0.0]` in position mode.
+- Raw PD torque saturation is present but low; clipped torque always stays inside `effort_limit_sim`.
+- No case exceeded `velocity_limit_sim`.
+- Position and pd_torque are close for this short matrix, but position mode has higher torque saturation on the `[0.1, 0.0, 0.0]` policy case.
+
 ## Position Mode Versus PD Torque Mode
 
 `position` mode keeps the existing `mujoco/g0.xml` position actuators. It sends `q_des` to the MuJoCo position actuator and records the LowCmd-style torque that would be produced by the deploy bridge.
