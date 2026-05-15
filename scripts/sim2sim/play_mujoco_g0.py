@@ -100,6 +100,8 @@ def main() -> int:
         "joint_vel": [],
         "root_pos": [],
         "root_quat": [],
+        "base_ang_vel": [],
+        "projected_gravity": [],
         "obs": [],
     }
 
@@ -116,6 +118,8 @@ def main() -> int:
         rows["joint_vel"].append(interface.get_joint_vel())
         rows["root_pos"].append(np.full(3, np.nan) if root_pos is None else root_pos)
         rows["root_quat"].append(np.full(4, np.nan) if root_quat is None else root_quat)
+        rows["base_ang_vel"].append(interface.get_base_ang_vel())
+        rows["projected_gravity"].append(interface.get_projected_gravity())
         rows["obs"].append(obs.copy())
         if viewer is not None:
             viewer.sync()
@@ -133,6 +137,7 @@ def main() -> int:
             default_joint_pos=cfg.get_default_joint_pos_array(),
             action_scale=np.asarray(cfg.ACTION_SCALE),
             sim_dt=np.asarray(interface.model.opt.timestep),
+            decimation=np.asarray(cfg.ISAAC_DECIMATION),
             control_dt=np.asarray(cfg.CONTROL_DT),
         )
         print(f"Saved MuJoCo rollout: {output}")

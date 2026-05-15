@@ -1,4 +1,4 @@
-# First G0 MuJoCo Sim2sim Validation Report
+# G0 MuJoCo Sim2sim Validation Report
 
 ## Context
 
@@ -275,8 +275,8 @@ This only validates that the TorchScript policy can run through the MuJoCo scaff
 ## Not Yet Aligned
 
 - `mujoco/g0.xml` is not a complete robot model.
-- MuJoCo body hierarchy is placeholder.
-- mass and inertia are placeholder.
+- MuJoCo body hierarchy is now URDF-derived, but still not validated against Isaac Lab USD.
+- mass and inertia are now URDF-derived, but still need hardware and Isaac Lab sanity checks.
 - actuator PD is placeholder.
 - torque limits are placeholder.
 - velocity limits are placeholder.
@@ -288,7 +288,7 @@ This only validates that the TorchScript policy can run through the MuJoCo scaff
 
 ## Next TODO
 
-1. Replace the placeholder nested-body XML with a real URDF/MJCF-derived G0 model.
+1. Calibrate the URDF-derived `mujoco/g0.xml` into a stable dynamics model.
 2. Preserve exact joint names and actuator names while replacing the physical model.
 3. Store MuJoCo `base_ang_vel`, `projected_gravity`, and `decimation` in rollout files.
 4. Add a deterministic zero-command mode for Isaac golden I/O or mirror Isaac command sampling in MuJoCo.
@@ -296,3 +296,90 @@ This only validates that the TorchScript policy can run through the MuJoCo scaff
 6. Align actuator PD, torque limits, velocity limits, friction, and foot contact geometry.
 7. Only after interface and dynamics alignment, interpret policy rollout quality.
 
+## URDF-Derived Model Migration Update
+
+Second validation time:
+
+```text
+2026-05-15 14:21:31 CST
+```
+
+The previous loadable placeholder model is preserved as:
+
+```text
+mujoco/g0_interface_placeholder.xml
+```
+
+The current `mujoco/g0.xml` is now generated from the source URDF with:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/generate_g0_mujoco_from_urdf.py
+```
+
+The generated working model keeps the URDF-derived body tree, mesh geoms, inertials, joint axes, and joint limits, then adds a floating root, ground plane, and 22 policy position actuators.
+
+URDF inspection passed:
+
+```text
+link_count: 23
+joint_count: 22
+movable_joint_count: 22
+mesh_count: 46
+missing_policy_joints: []
+extra_movable_joints: []
+missing_meshes: []
+links_missing_inertial: []
+movable_without_limit: []
+```
+
+Latest validation:
+
+```text
+pytest: 11 passed
+validate mujoco/g0.xml: Summary OK, all 22 joints found
+validate mujoco/g0_interface_placeholder.xml: Summary OK, all 22 joints found
+```
+
+Latest MuJoCo zero-action rollout:
+
+```text
+Saved MuJoCo rollout: logs/sim2sim/mujoco_zero_action_rollout.npz
+Finished 100 MuJoCo control steps.
+WARNING: Nan, Inf or huge value in QACC at DOF 0. The simulation is unstable. Time = 0.0600.
+```
+
+This warning is a dynamics/contact/actuator calibration issue in the new URDF-derived working model. It is not interpreted as policy failure.
+
+The zero-action action bridge remains exact:
+
+```text
+target_joint_pos == default_joint_pos
+max_target_default_abs_err: 0.0
+```
+
+Latest short rollout comparison:
+
+```text
+action mean/max abs error: 0 / 0
+target_joint_pos mean/max abs error: 0 / 0
+joint_pos mean/max abs error: 111.666 / 16816.7
+joint_vel mean/max abs error: 18139.1 / 1.04043e+06
+root_height mean/max abs error: 0.00533956 / 0.09883
+```
+
+Large joint position/velocity errors are expected while the URDF-derived MuJoCo model is dynamically unstable.
+
+First-frame observation term report:
+
+```text
+joint_names: ok
+default_joint_pos: 0 / 0
+action: 0 / 0
+target_joint_pos: 0 / 0
+obs_shape: 0 / 0
+obs_last_action: 0 / 0
+projected_gravity: about 0.00206 / 0.00349
+base_ang_vel: about 5.22 / 9.73
+```
+
+The MuJoCo observation builder was changed from frame-major history to term-major history to better match Isaac Lab. `projected_gravity` and `base_ang_vel` are now recorded in MuJoCo rollout files, but their frame conventions still require controlled-orientation diagnostics.

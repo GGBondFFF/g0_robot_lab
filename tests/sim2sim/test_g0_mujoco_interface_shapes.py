@@ -24,6 +24,11 @@ def test_expected_observation_dim_without_mujoco() -> None:
     assert G0MuJoCoInterface.expected_observation_dim() == cfg.get_policy_observation_dim()
 
 
+def test_projected_gravity_for_identity_quaternion() -> None:
+    rot = G0MuJoCoInterface.quat_wxyz_to_matrix(np.asarray([1.0, 0.0, 0.0, 0.0]))
+    np.testing.assert_allclose(rot.T @ np.asarray([0.0, 0.0, -1.0]), np.asarray([0.0, 0.0, -1.0]))
+
+
 def test_mujoco_model_has_all_g0_joints_if_available() -> None:
     try:
         import_mujoco()
@@ -38,4 +43,3 @@ def test_mujoco_model_has_all_g0_joints_if_available() -> None:
     assert list(interface.joint_indices.keys()) == cfg.get_joint_names()
     assert interface.get_joint_pos().shape == (cfg.get_action_dim(),)
     assert interface.get_joint_vel().shape == (cfg.get_action_dim(),)
-

@@ -1,0 +1,145 @@
+<mujoco model="g0_sim2sim_placeholder">
+  <!--
+    First editable MuJoCo scaffold for G0 sim2sim.
+
+    This is not a final dynamics model. Joint names and actuator names are
+    aligned with G0_JOINT_SDK_NAMES so the software bridge can be validated.
+    Geometry, mass, inertia, actuator PD, torque limits, contact parameters,
+    and friction still need to be converted from URDF/USD and calibrated
+    against the Isaac Lab G0_CFG baseline.
+  -->
+
+  <compiler angle="radian" coordinate="local"/>
+  <option timestep="0.005" gravity="0 0 -9.81"/>
+
+  <default>
+    <joint damping="0.02" armature="0.001" limited="true" range="-3.14 3.14"/>
+    <geom type="capsule" size="0.015 0.04" rgba="0.6 0.6 0.6 1" friction="1.0 0.005 0.0001"/>
+    <position kp="4.0" ctrllimited="true" ctrlrange="-3.14 3.14" forcelimited="true" forcerange="-1.2 1.2"/>
+  </default>
+
+  <worldbody>
+    <geom name="ground" type="plane" size="2 2 0.05" rgba="0.3 0.35 0.35 1"/>
+    <body name="base_link" pos="0 0 0.23">
+      <freejoint name="root"/>
+      <geom name="torso_placeholder" type="box" size="0.05 0.04 0.08" mass="0.5" rgba="0.2 0.4 0.8 1"/>
+
+      <geom name="left_foot_contact_placeholder" type="box" pos="0.02 0.04 -0.22" size="0.04 0.018 0.006" mass="0.03"/>
+      <geom name="right_foot_contact_placeholder" type="box" pos="0.02 -0.04 -0.22" size="0.04 0.018 0.006" mass="0.03"/>
+      <!-- SDK/deployment joint order. These are placeholder nested joints, not real G0 kinematics. -->
+      <body name="l_hip_pitch_placeholder" pos="0 0 0">
+        <joint name="l_hip_pitch_joint" axis="0 1 0"/>
+        <geom name="l_hip_pitch_geom" pos="0 0 -0.005"/>
+        <body name="l_hip_roll_placeholder" pos="0 0 0">
+          <joint name="l_hip_roll_joint" axis="1 0 0"/>
+          <geom name="l_hip_roll_geom" pos="0 0 -0.010"/>
+          <body name="l_hip_yaw_placeholder" pos="0 0 0">
+            <joint name="l_hip_yaw_joint" axis="0 0 1"/>
+            <geom name="l_hip_yaw_geom" pos="0 0 -0.015"/>
+            <body name="l_knee_pitch_placeholder" pos="0 0 0">
+              <joint name="l_knee_pitch_joint" axis="0 1 0"/>
+              <geom name="l_knee_pitch_geom" pos="0 0 -0.020"/>
+              <body name="l_ankle_pitch_placeholder" pos="0 0 0">
+                <joint name="l_ankle_pitch_joint" axis="0 1 0"/>
+                <geom name="l_ankle_pitch_geom" pos="0 0 -0.025"/>
+                <body name="l_ankle_roll_placeholder" pos="0 0 0">
+                  <joint name="l_ankle_roll_joint" axis="1 0 0"/>
+                  <geom name="l_ankle_roll_geom" pos="0 0 -0.030"/>
+                  <body name="r_hip_pitch_placeholder" pos="0 0 0">
+                    <joint name="r_hip_pitch_joint" axis="0 1 0"/>
+                    <geom name="r_hip_pitch_geom" pos="0 0 -0.035"/>
+                    <body name="r_hip_roll_placeholder" pos="0 0 0">
+                      <joint name="r_hip_roll_joint" axis="1 0 0"/>
+                      <geom name="r_hip_roll_geom" pos="0 0 -0.040"/>
+                      <body name="r_hip_yaw_placeholder" pos="0 0 0">
+                        <joint name="r_hip_yaw_joint" axis="0 0 1"/>
+                        <geom name="r_hip_yaw_geom" pos="0 0 -0.045"/>
+                        <body name="r_knee_pitch_placeholder" pos="0 0 0">
+                          <joint name="r_knee_pitch_joint" axis="0 1 0"/>
+                          <geom name="r_knee_pitch_geom" pos="0 0 -0.050"/>
+                          <body name="r_ankle_pitch_placeholder" pos="0 0 0">
+                            <joint name="r_ankle_pitch_joint" axis="0 1 0"/>
+                            <geom name="r_ankle_pitch_geom" pos="0 0 -0.055"/>
+                            <body name="r_ankle_roll_placeholder" pos="0 0 0">
+                              <joint name="r_ankle_roll_joint" axis="1 0 0"/>
+                              <geom name="r_ankle_roll_geom" pos="0 0 -0.060"/>
+                              <body name="waist_yaw_placeholder" pos="0 0 0">
+                                <joint name="waist_yaw_joint" axis="0 0 1"/>
+                                <geom name="waist_yaw_geom" pos="0 0 -0.065"/>
+                                <body name="waist_roll_placeholder" pos="0 0 0">
+                                  <joint name="waist_roll_joint" axis="1 0 0"/>
+                                  <geom name="waist_roll_geom" pos="0 0 -0.070"/>
+                                  <body name="l_shoulder_pitch_placeholder" pos="0 0 0">
+                                    <joint name="l_shoulder_pitch_joint" axis="0 1 0"/>
+                                    <geom name="l_shoulder_pitch_geom" pos="0 0 -0.075"/>
+                                    <body name="l_shoulder_roll_placeholder" pos="0 0 0">
+                                      <joint name="l_shoulder_roll_joint" axis="1 0 0"/>
+                                      <geom name="l_shoulder_roll_geom" pos="0 0 -0.080"/>
+                                      <body name="l_shoulder_yaw_placeholder" pos="0 0 0">
+                                        <joint name="l_shoulder_yaw_joint" axis="0 0 1"/>
+                                        <geom name="l_shoulder_yaw_geom" pos="0 0 -0.085"/>
+                                        <body name="l_elbow_pitch_placeholder" pos="0 0 0">
+                                          <joint name="l_elbow_pitch_joint" axis="0 1 0"/>
+                                          <geom name="l_elbow_pitch_geom" pos="0 0 -0.090"/>
+                                          <body name="r_shoulder_pitch_placeholder" pos="0 0 0">
+                                            <joint name="r_shoulder_pitch_joint" axis="0 1 0"/>
+                                            <geom name="r_shoulder_pitch_geom" pos="0 0 -0.095"/>
+                                            <body name="r_shoulder_roll_placeholder" pos="0 0 0">
+                                              <joint name="r_shoulder_roll_joint" axis="1 0 0"/>
+                                              <geom name="r_shoulder_roll_geom" pos="0 0 -0.100"/>
+                                              <body name="r_shoulder_yaw_placeholder" pos="0 0 0">
+                                                <joint name="r_shoulder_yaw_joint" axis="0 0 1"/>
+                                                <geom name="r_shoulder_yaw_geom" pos="0 0 -0.105"/>
+                                                <body name="r_elbow_pitch_placeholder" pos="0 0 0">
+                                                  <joint name="r_elbow_pitch_joint" axis="0 1 0"/>
+                                                  <geom name="r_elbow_pitch_geom" pos="0 0 -0.110"/>
+                                                </body>
+                                              </body>
+                                            </body>
+                                          </body>
+                                        </body>
+                                      </body>
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="l_hip_pitch_joint" joint="l_hip_pitch_joint"/>
+    <position name="l_hip_roll_joint" joint="l_hip_roll_joint"/>
+    <position name="l_hip_yaw_joint" joint="l_hip_yaw_joint"/>
+    <position name="l_knee_pitch_joint" joint="l_knee_pitch_joint"/>
+    <position name="l_ankle_pitch_joint" joint="l_ankle_pitch_joint"/>
+    <position name="l_ankle_roll_joint" joint="l_ankle_roll_joint"/>
+    <position name="r_hip_pitch_joint" joint="r_hip_pitch_joint"/>
+    <position name="r_hip_roll_joint" joint="r_hip_roll_joint"/>
+    <position name="r_hip_yaw_joint" joint="r_hip_yaw_joint"/>
+    <position name="r_knee_pitch_joint" joint="r_knee_pitch_joint"/>
+    <position name="r_ankle_pitch_joint" joint="r_ankle_pitch_joint"/>
+    <position name="r_ankle_roll_joint" joint="r_ankle_roll_joint"/>
+    <position name="waist_yaw_joint" joint="waist_yaw_joint"/>
+    <position name="waist_roll_joint" joint="waist_roll_joint"/>
+    <position name="l_shoulder_pitch_joint" joint="l_shoulder_pitch_joint"/>
+    <position name="l_shoulder_roll_joint" joint="l_shoulder_roll_joint"/>
+    <position name="l_shoulder_yaw_joint" joint="l_shoulder_yaw_joint"/>
+    <position name="l_elbow_pitch_joint" joint="l_elbow_pitch_joint"/>
+    <position name="r_shoulder_pitch_joint" joint="r_shoulder_pitch_joint"/>
+    <position name="r_shoulder_roll_joint" joint="r_shoulder_roll_joint"/>
+    <position name="r_shoulder_yaw_joint" joint="r_shoulder_yaw_joint"/>
+    <position name="r_elbow_pitch_joint" joint="r_elbow_pitch_joint"/>
+  </actuator>
+</mujoco>

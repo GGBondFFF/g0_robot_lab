@@ -22,6 +22,17 @@ except ModuleNotFoundError:
     import g0_sim2sim_config as cfg
 
 
+TERM_SLICES = {
+    "base_ang_vel": slice(0, 3),
+    "projected_gravity": slice(3, 6),
+    "velocity_commands": slice(6, 9),
+    "joint_pos_rel": slice(9, 31),
+    "joint_vel_rel": slice(31, 53),
+    "last_action": slice(53, 75),
+    "gait_phase": slice(75, 77),
+}
+
+
 def import_mujoco() -> Any:
     """Import MuJoCo on demand and return the module."""
 
@@ -195,7 +206,7 @@ class G0MuJoCoInterface:
         return target_joint_pos
 
     def build_observation(self) -> np.ndarray:
-        """Build flattened policy observation with history padding."""
+        """Build flattened policy observation with Isaac-style term-major history."""
 
         frame = self.build_observation_frame(
             joint_pos=self.get_joint_pos(),
@@ -203,11 +214,17 @@ class G0MuJoCoInterface:
             last_action=self.last_action,
             command=self.command,
             sim_time=self.sim_time,
+            base_ang_vel=self.get_base_ang_vel(),
+            projected_gravity=self.get_projected_gravity(),
         )
-        self._history.append(frame)
+        if not self._history:
+            self._history = [frame.copy() for _ in range(cfg.POLICY_HISTORY_LENGTH)]
+        else:
+            self._history.append(frame)
         self._history = self._history[-cfg.POLICY_HISTORY_LENGTH :]
-        padded = [np.zeros_like(frame) for _ in range(cfg.POLICY_HISTORY_LENGTH - len(self._history))]
-        return np.concatenate([*padded, *self._history])
+        return np.concatenate(
+            [np.concatenate([history_frame[term_slice] for history_frame in self._history]) for term_slice in TERM_SLICES.values()]
+        )
 
     def step(self, action: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Apply an optional action, step MuJoCo for one control interval, and return obs/target."""
@@ -227,3 +244,49 @@ class G0MuJoCoInterface:
         if self.model.nq < 7:
             return None, None
         return np.asarray(self.data.qpos[:3], dtype=np.float64), np.asarray(self.data.qpos[3:7], dtype=np.float64)
+
+    def get_base_ang_vel(self) -> np.ndarray:
+        """Return MuJoCo freejoint angular velocity for base-frame diagnostics.
+
+        MuJoCo stores freejoint qvel as translational velocity followed by
+        angular velocity. This is close to the Isaac Lab term needed for policy
+        observations, but the exact frame convention still needs to be checked
+        term-by-term against Isaac `root_ang_vel_b`.
+        """
+
+        if self.model.nv < 6:
+            return np.zeros(3, dtype=np.float64)
+        return np.asarray(self.data.qvel[3:6], dtype=np.float64)
+
+    @staticmethod
+    def quat_wxyz_to_matrix(quat: np.ndarray) -> np.ndarray:
+        """Convert a MuJoCo/Isaac-style ``w, x, y, z`` quaternion to a rotation matrix."""
+
+        quat = np.asarray(quat, dtype=np.float64)
+        norm = np.linalg.norm(quat)
+        if norm == 0.0:
+            return np.eye(3)
+        w, x, y, z = quat / norm
+        return np.asarray(
+            [
+                [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+                [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+                [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+            ],
+            dtype=np.float64,
+        )
+
+    def get_projected_gravity(self) -> np.ndarray:
+        """Project normalized world gravity into the MuJoCo base frame.
+
+        This uses the freejoint quaternion in ``w, x, y, z`` order and computes
+        ``R_world_body.T @ [0, 0, -1]``. The result is now recorded for
+        diagnostics, but should still be compared against Isaac Lab before being
+        considered fully aligned.
+        """
+
+        _, quat = self.get_root_pose()
+        if quat is None:
+            return np.asarray([0.0, 0.0, -1.0], dtype=np.float64)
+        rot_world_body = self.quat_wxyz_to_matrix(quat)
+        return rot_world_body.T @ np.asarray([0.0, 0.0, -1.0], dtype=np.float64)

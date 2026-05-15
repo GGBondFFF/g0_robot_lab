@@ -9,12 +9,21 @@ This directory contains the Isaac Lab to MuJoCo sim2sim validation scaffold for 
 - `play_mujoco_g0.py`: MuJoCo rollout runner for zero-action or exported TorchScript policy.
 - `dump_isaac_golden_io.py`: Isaac Lab golden I/O dumper. Must be launched through Isaac Lab.
 - `compare_isaac_mujoco_rollout.py`: compares Isaac and MuJoCo `.npz` rollouts and writes a Markdown report.
+- `compare_first_frame_observation.py`: compares first-frame observation terms instead of only flattened rollout arrays.
+- `inspect_g0_urdf_for_mujoco.py`: read-only URDF readiness inspection for MuJoCo migration.
+- `generate_g0_mujoco_from_urdf.py`: generates the current URDF-derived `mujoco/g0.xml` working model.
 - `validate_sim2sim_setup.py`: quick structure and interface validator.
 
 ## Validate Setup
 
 ```bash
 python scripts/sim2sim/validate_sim2sim_setup.py
+```
+
+Validate the preserved placeholder model:
+
+```bash
+python scripts/sim2sim/validate_sim2sim_setup.py --model mujoco/g0_interface_placeholder.xml
 ```
 
 If ordinary Python cannot import the project package, run through Isaac Lab:
@@ -31,6 +40,24 @@ After installing DeepMind MuJoCo in the `g0_isaaclab` environment, the expected 
 OK: MuJoCo model has all 22 joints
 Summary: OK
 ```
+
+## Dump Isaac Golden I/O
+
+## Inspect And Generate MuJoCo Model
+
+Inspect URDF migration readiness:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/inspect_g0_urdf_for_mujoco.py
+```
+
+Regenerate the URDF-derived working model:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/generate_g0_mujoco_from_urdf.py
+```
+
+The generated `mujoco/g0.xml` is a working model, not final dynamics. The preserved interface scaffold is `mujoco/g0_interface_placeholder.xml`.
 
 ## Dump Isaac Golden I/O
 
@@ -120,11 +147,22 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_isaac_mujoco_
   --output logs/sim2sim/compare_zero_action_report.md
 ```
 
-Expected zero-action interface result: `action` and `target_joint_pos` compare with zero error. Joint/root state differences are expected while `mujoco/g0.xml` remains a placeholder model.
+First-frame term report:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_first_frame_observation.py \
+  --isaac logs/sim2sim/isaac_zero_action_golden_io.npz \
+  --mujoco logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/first_frame_observation_report.md
+```
+
+Expected zero-action interface result: `action` and `target_joint_pos` compare with zero error. Joint/root state differences are expected while `mujoco/g0.xml` remains an uncalibrated URDF-derived working model.
+
+With the current URDF-derived model, a MuJoCo `QACC` instability warning is also expected until actuator/contact/inertia parameters are aligned. Do not treat that as policy failure.
 
 ## Current TODOs
 
-- Replace placeholder `mujoco/g0.xml` with a full URDF/MJCF-derived model.
+- Calibrate the URDF-derived `mujoco/g0.xml` into a full dynamics model.
 - Verify projected gravity frame against Isaac Lab.
 - Verify base angular velocity frame and scaling against Isaac Lab.
 - Align actuator PD, torque limits, velocity limits, contact, and friction.

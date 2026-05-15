@@ -12,10 +12,10 @@
 - [x] all-one action gives `default + 0.12`
 - [x] all-negative-one action gives `default - 0.12`
 - [x] action clipping verified
-- [ ] first-frame observation compared term by term
+- [x] first-frame observation compared term by term
 - [ ] `projected_gravity` frame convention verified
 - [ ] `base_ang_vel` frame convention verified
-- [ ] control dt and decimation match Isaac Lab
+- [x] control dt and decimation match Isaac Lab
 - [ ] actuator PD gains aligned
 - [ ] torque and velocity limits aligned
 - [ ] foot contact geometry aligned
