@@ -39,9 +39,7 @@ What must stay G0-specific:
 
 ## Hardware Constraints
 
-`g0_actuators.py` contains motor hardware constants such as rated torque, peak torque, max velocity, and armature. Those are treated as physical properties and were not changed in this torque-debug pass.
-
-Current worktree note: `g0_actuators.py` already has an uncommitted diff changing `STANDARD_SERVO_RATED_TORQUE` from `0.5` to `1.0`. This pass did not expand that diff. Runtime `--effort-scale` is debug-only and does not permanently change hardware constants.
+`g0_actuators.py` contains motor hardware constants such as rated torque, peak torque, max velocity, and armature. Those are treated as physical properties. The current documented baseline keeps the standard servo rated torque at `0.5 N*m`; runtime `--effort-scale` is debug-only and does not permanently change hardware constants.
 
 `stiffness` and `damping` in `g0.py` are PD control parameters, so they can be tuned. `effort_limit_sim` and `velocity_limit_sim` still come from `g0_actuators.py`; no bypass was added.
 

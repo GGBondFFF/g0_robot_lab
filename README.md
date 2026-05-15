@@ -1,135 +1,141 @@
-# Template for Isaac Lab Projects
+# g0_robot_lab
 
-## Overview
+`g0_robot_lab` is a G0 humanoid locomotion project built on Isaac Lab.
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
+The current main task is:
 
-**Key Features:**
+```text
+G0-Velocity-v0
+```
 
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
+The project can already run train and play inside Isaac Lab. The current work on `main` is a protected baseline for G0 locomotion debugging: actuator parameters, zero-action standing, reward/termination/reset tuning, and preparation for later Isaac Lab to MuJoCo sim2sim work.
 
-**Keywords:** extension, template, isaaclab
+Do not mix this project with `humanoid_lab_v0`, and do not move the current task back to the old `manager_based` template layout. The active task tree is `tasks/locomotion/`.
 
-## Installation
+## Current Status
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
+- Project: `g0_robot_lab`
+- Main task: `G0-Velocity-v0`
+- Simulator: Isaac Lab
+- Robot config: `G0_CFG`
+- Train entry point: `scripts/rsl_rl/train.py`
+- Play entry point: `scripts/rsl_rl/play.py`
+- Current baseline: train/play runnable, with zero-action standing and locomotion stability still under active debug
 
-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
+This repository should keep the current `main` branch runnable. Large training runs, MuJoCo sim2sim scaffolding, and non-documentation refactors should happen on later branches.
 
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
+## Directory Overview
 
-    ```bash
-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-    python -m pip install -e source/g0_robot_lab
+```text
+g0_robot_lab/
+├── README.md
+├── docs/
+├── scripts/
+│   └── rsl_rl/
+│       ├── train.py
+│       └── play.py
+└── source/
+    └── g0_robot_lab/
+        └── g0_robot_lab/
+            ├── assets/
+            │   └── robots/
+            │       └── g0/
+            │           ├── g0.py
+            │           ├── g0_actuators.py
+            │           ├── urdf/
+            │           ├── usd/
+            │           └── meshes/
+            └── tasks/
+                └── locomotion/
+                    ├── __init__.py
+                    ├── agents/
+                    ├── mdp/
+                    └── robots/
+                        └── g0/
+                            └── velocity_env_cfg.py
+```
 
-- Verify that the extension is correctly installed by:
+Key paths:
 
-    - Listing the available tasks:
+- `source/g0_robot_lab/g0_robot_lab/tasks/locomotion/`: current locomotion task package
+- `source/g0_robot_lab/g0_robot_lab/tasks/locomotion/__init__.py`: Gym task registration for `G0-Velocity-v0`
+- `source/g0_robot_lab/g0_robot_lab/tasks/locomotion/robots/g0/velocity_env_cfg.py`: G0 velocity environment config
+- `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/g0.py`: `G0_CFG`, joint names, default pose, actuator groups
+- `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/g0_actuators.py`: current actuator hardware constants and debug baseline values
 
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
+## Install
 
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/list_envs.py
-        ```
-
-    - Running a task:
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
-        ```
-
-    - Running a task with dummy agents:
-
-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
-
-        - Zero-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
-            ```
-        - Random-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
-            ```
-
-### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code.
-
-### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/g0_robot_lab/g0_robot_lab/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension.
-
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+Install Isaac Lab first, then install this package in editable mode from the repository root:
 
 ```bash
-pip install pre-commit
+cd /home/lz/g0_robot_lab/g0_robot_lab
+/home/lz/IsaacLab/isaaclab.sh -p -m pip install -e source/g0_robot_lab
 ```
 
-Then you can run pre-commit with:
+## Common Commands
+
+List or check the registered G0 task:
 
 ```bash
-pre-commit run --all-files
+/home/lz/IsaacLab/isaaclab.sh -p -c "
+from isaaclab.app import AppLauncher
+app_launcher = AppLauncher({'headless': True})
+simulation_app = app_launcher.app
+
+import gymnasium as gym
+import g0_robot_lab
+import g0_robot_lab.tasks
+
+print([env_id for env_id in gym.registry.keys() if 'G0' in env_id])
+simulation_app.close()
+"
 ```
 
-## Troubleshooting
+Smoke test:
 
-### Pylance Missing Indexing of Extensions
-
-In some VsCode versions, the indexing of part of the extensions is missing.
-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
-
-```json
-{
-    "python.analysis.extraPaths": [
-        "<path-to-ext-repo>/source/g0_robot_lab"
-    ]
-}
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/rsl_rl/train.py \
+  --task G0-Velocity-v0 \
+  --num_envs 1 \
+  --max_iterations 1
 ```
 
-### Pylance Crash
+Small headless test:
 
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
-
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/rsl_rl/train.py \
+  --task G0-Velocity-v0 \
+  --num_envs 32 \
+  --max_iterations 100 \
+  --headless
 ```
+
+Play a checkpoint:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/rsl_rl/play.py \
+  --task G0-Velocity-v0 \
+  --num_envs 32 \
+  --checkpoint <checkpoint-path>
+```
+
+More command details are in [docs/run_commands.md](docs/run_commands.md).
+
+## Current Debug Focus
+
+The current baseline is not considered a final walking policy. Before large-scale training, keep checking:
+
+- zero-action standing
+- default joint pose and root initial height
+- reward, termination, and reset behavior
+- foot collision/contact patch
+- COM, mass, and inertia consistency
+- action scale and observation/action ordering for later sim2sim
+
+See:
+
+- [docs/project_structure.md](docs/project_structure.md)
+- [docs/observation_action_interface.md](docs/observation_action_interface.md)
+- [docs/g0_actuator_parameters.md](docs/g0_actuator_parameters.md)
+- [docs/zero_action_standing_debug.md](docs/zero_action_standing_debug.md)
+- [docs/sim2sim_isaaclab_to_mujoco.md](docs/sim2sim_isaaclab_to_mujoco.md)

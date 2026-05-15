@@ -10,7 +10,7 @@ The current sweep intentionally uses two-decimal initial pose values. G0 is a sm
 
 `g0_actuators.py` contains hardware constants: rated torque, peak torque, velocity limit, and armature. This sweep does not enlarge those constants.
 
-There is currently a pre-existing uncommitted diff in `g0_actuators.py` changing `STANDARD_SERVO_RATED_TORQUE` from `0.5` to `1.0`. This report does not expand that diff. The new `--effort-scale` option is runtime debug only and does not write back to `g0_actuators.py`.
+The current documented hardware baseline keeps `STANDARD_SERVO_RATED_TORQUE = 0.5`. The `--effort-scale` option is runtime debug only and does not write back to `g0_actuators.py`.
 
 ## Script
 
