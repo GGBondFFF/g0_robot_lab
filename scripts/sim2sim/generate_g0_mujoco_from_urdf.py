@@ -9,6 +9,8 @@ sim2sim-specific pieces needed for policy validation:
 - a ground plane
 - 22 position actuators named exactly like ``G0_JOINT_SDK_NAMES``
 - mesh paths rewritten relative to ``mujoco/g0.xml``
+- collision filtering that preserves robot-ground contact while disabling
+  robot internal self-collision, matching Isaac Lab ``enabled_self_collisions=False``
 
 This is still not a final dynamics model. Actuator gains, contact geometry,
 friction, damping, armature, torque limits, and velocity limits must be aligned
@@ -101,7 +103,16 @@ def wrap_with_floating_root(root: ET.Element) -> None:
 
     original_children = list(worldbody)
     worldbody.clear()
-    ET.SubElement(worldbody, "geom", name="ground", type="plane", size="2 2 0.05", rgba="0.3 0.35 0.35 1")
+    ET.SubElement(
+        worldbody,
+        "geom",
+        name="ground",
+        type="plane",
+        size="2 2 0.05",
+        rgba="0.3 0.35 0.35 1",
+        contype="1",
+        conaffinity="2",
+    )
     base_body = ET.SubElement(worldbody, "body", name="base_link", pos="0 0 0.23")
     ET.SubElement(base_body, "freejoint", name="root")
     base_body.append(
@@ -112,6 +123,41 @@ def wrap_with_floating_root(root: ET.Element) -> None:
     )
     for child in original_children:
         base_body.append(child)
+
+
+def apply_isaac_style_collision_filter(root: ET.Element) -> None:
+    """Disable robot-robot self-collision while preserving robot-ground contact.
+
+    MuJoCo generates contacts when
+    ``(contype1 & conaffinity2) || (contype2 & conaffinity1)`` is non-zero.
+
+    We set:
+
+    - ground: ``contype=1``, ``conaffinity=2``
+    - robot geoms: ``contype=2``, ``conaffinity=1``
+
+    This keeps ground-robot contacts enabled:
+
+    ``(1 & 1) || (2 & 2) != 0``
+
+    and disables robot-robot contacts:
+
+    ``(2 & 1) || (2 & 1) == 0``
+
+    Foot mesh geoms remain mesh geoms. This function does not add boxes,
+    capsules, or other debug-only contact shapes.
+    """
+
+    worldbody = root.find("worldbody")
+    if worldbody is None:
+        raise RuntimeError("MJCF does not contain worldbody.")
+    for geom in worldbody.iter("geom"):
+        if geom.attrib.get("name") == "ground":
+            geom.attrib["contype"] = "1"
+            geom.attrib["conaffinity"] = "2"
+        else:
+            geom.attrib["contype"] = "2"
+            geom.attrib["conaffinity"] = "1"
 
 
 def add_actuators(root: ET.Element) -> None:
@@ -151,6 +197,7 @@ def generate(urdf_path: Path, output_path: Path, intermediate_path: Path) -> Non
     add_sim_options(root)
     rewrite_mesh_paths(root)
     wrap_with_floating_root(root)
+    apply_isaac_style_collision_filter(root)
     add_actuators(root)
     indent(root)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,4 +214,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

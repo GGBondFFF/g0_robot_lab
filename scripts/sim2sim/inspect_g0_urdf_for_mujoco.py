@@ -9,10 +9,13 @@ joint order used by the Isaac Lab task.
 from __future__ import annotations
 
 import argparse
+import struct
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+
+import numpy as np
 
 try:
     from scripts.sim2sim import g0_sim2sim_config as cfg
@@ -33,6 +36,22 @@ class JointInfo:
     has_limit: bool
 
 
+@dataclass
+class CollisionInfo:
+    link_name: str
+    kind: str
+    origin_xyz: str
+    origin_rpy: str
+    mesh_filename: str | None
+    mesh_path: Path | None
+    mesh_exists: bool
+    visual_mesh_same: bool | None
+    bbox_min: tuple[float, float, float] | None
+    bbox_max: tuple[float, float, float] | None
+    vertex_count: int | None
+    face_count: int | None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -50,6 +69,84 @@ def _child_text(element: ET.Element, tag: str, attr: str | None = None) -> str |
     if attr is None:
         return child.text
     return child.attrib.get(attr)
+
+
+def _read_stl_mesh_stats(path: Path) -> tuple[tuple[float, float, float], tuple[float, float, float], int, int] | None:
+    """Read basic STL bbox and counts for binary or ASCII STL."""
+
+    if not path.exists():
+        return None
+    data = path.read_bytes()
+    vertices: list[tuple[float, float, float]] = []
+    if len(data) >= 84:
+        tri_count = struct.unpack("<I", data[80:84])[0]
+        expected_size = 84 + tri_count * 50
+        if expected_size == len(data):
+            offset = 84
+            for _ in range(tri_count):
+                offset += 12
+                for _vertex in range(3):
+                    vertices.append(struct.unpack("<fff", data[offset : offset + 12]))
+                    offset += 12
+                offset += 2
+            arr = np.asarray(vertices, dtype=np.float64)
+            return tuple(arr.min(axis=0)), tuple(arr.max(axis=0)), int(arr.shape[0]), int(tri_count)
+
+    text = data.decode("utf-8", errors="ignore")
+    face_count = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("facet normal"):
+            face_count += 1
+        if stripped.startswith("vertex "):
+            parts = stripped.split()
+            if len(parts) == 4:
+                vertices.append((float(parts[1]), float(parts[2]), float(parts[3])))
+    if not vertices:
+        return None
+    arr = np.asarray(vertices, dtype=np.float64)
+    return tuple(arr.min(axis=0)), tuple(arr.max(axis=0)), int(arr.shape[0]), int(face_count)
+
+
+def _mesh_filename_from_geometry(element: ET.Element | None) -> str | None:
+    if element is None:
+        return None
+    mesh = element.find("./geometry/mesh")
+    if mesh is not None:
+        return mesh.attrib.get("filename")
+    return None
+
+
+def inspect_link_collisions(link: ET.Element, urdf_dir: Path) -> list[CollisionInfo]:
+    link_name = link.attrib.get("name", "")
+    visual_meshes = [_mesh_filename_from_geometry(visual) for visual in link.findall("visual")]
+    collisions: list[CollisionInfo] = []
+    for collision in link.findall("collision"):
+        origin = collision.find("origin")
+        geometry = collision.find("geometry")
+        mesh_filename = _mesh_filename_from_geometry(collision)
+        kind = "unknown"
+        if geometry is not None and len(list(geometry)):
+            kind = list(geometry)[0].tag
+        mesh_path = (urdf_dir / mesh_filename).resolve() if mesh_filename else None
+        stats = _read_stl_mesh_stats(mesh_path) if mesh_path else None
+        collisions.append(
+            CollisionInfo(
+                link_name=link_name,
+                kind=kind,
+                origin_xyz="0 0 0" if origin is None else origin.attrib.get("xyz", "0 0 0"),
+                origin_rpy="0 0 0" if origin is None else origin.attrib.get("rpy", "0 0 0"),
+                mesh_filename=mesh_filename,
+                mesh_path=mesh_path,
+                mesh_exists=bool(mesh_path and mesh_path.exists()),
+                visual_mesh_same=(mesh_filename in visual_meshes) if mesh_filename else None,
+                bbox_min=None if stats is None else stats[0],
+                bbox_max=None if stats is None else stats[1],
+                vertex_count=None if stats is None else stats[2],
+                face_count=None if stats is None else stats[3],
+            )
+        )
+    return collisions
 
 
 def inspect_urdf(urdf_path: Path) -> dict[str, object]:
@@ -82,6 +179,7 @@ def inspect_urdf(urdf_path: Path) -> dict[str, object]:
     policy_names = cfg.get_joint_names()
     link_names = [link.attrib.get("name", "") for link in links]
     foot_links = [name for name in link_names if "foot" in name]
+    foot_collision_info: dict[str, list[CollisionInfo]] = {}
 
     mesh_paths: list[Path] = []
     missing_meshes: list[str] = []
@@ -112,6 +210,10 @@ def inspect_urdf(urdf_path: Path) -> dict[str, object]:
     extra_movable_joints = [name for name in movable_names if name not in policy_names]
     child_links = {joint.child for joint in joint_infos}
     root_links = [name for name in link_names if name not in child_links]
+    for link in links:
+        name = link.attrib.get("name", "")
+        if name in {"l_foot_link", "r_foot_link"}:
+            foot_collision_info[name] = inspect_link_collisions(link, urdf_dir)
 
     return {
         "link_count": len(links),
@@ -130,6 +232,7 @@ def inspect_urdf(urdf_path: Path) -> dict[str, object]:
         "inertials_missing_inertia": inertials_missing_inertia,
         "movable_without_limit": movable_without_limit,
         "joints": joint_infos,
+        "foot_collision_info": foot_collision_info,
     }
 
 
@@ -154,6 +257,22 @@ def print_report(report: dict[str, object]) -> None:
     print(f"inertials_missing_inertia: {report['inertials_missing_inertia']}")
     print(f"movable_without_limit: {report['movable_without_limit']}")
     print("")
+    print("foot_collision_summary:")
+    for link_name, collisions in report["foot_collision_info"].items():
+        print(f"  {link_name}: collision_count={len(collisions)}")
+        for index, collision in enumerate(collisions):
+            print(f"    collision[{index}].type: {collision.kind}")
+            print(f"    collision[{index}].origin_xyz: {collision.origin_xyz}")
+            print(f"    collision[{index}].origin_rpy: {collision.origin_rpy}")
+            print(f"    collision[{index}].mesh_filename: {collision.mesh_filename}")
+            print(f"    collision[{index}].mesh_path: {collision.mesh_path}")
+            print(f"    collision[{index}].mesh_exists: {collision.mesh_exists}")
+            print(f"    collision[{index}].visual_mesh_same: {collision.visual_mesh_same}")
+            print(f"    collision[{index}].bbox_min: {collision.bbox_min}")
+            print(f"    collision[{index}].bbox_max: {collision.bbox_max}")
+            print(f"    collision[{index}].vertex_count: {collision.vertex_count}")
+            print(f"    collision[{index}].face_count: {collision.face_count}")
+    print("")
     print("joint_structure:")
     for joint in report["joints"]:
         print(
@@ -162,7 +281,8 @@ def print_report(report: dict[str, object]) -> None:
         )
     print("")
     print("suggested MuJoCo conversion warnings:")
-    print("  - URDF mesh collisions may need simplified foot contact geoms in MJCF.")
+    print("  - URDF foot collisions are mesh-based; do not replace them in the formal MJCF without evidence.")
+    print("  - If simplified foot geoms are needed for diagnosis, keep them in a separate debug-only model.")
     print("  - Actuator PD, torque limits, velocity limits, damping, and armature are not represented by URDF alone.")
     print("  - Confirm quaternion and base-frame conventions before comparing projected gravity or base angular velocity.")
     print("  - Verify mass/inertia values against the expected hardware mass before trusting dynamics.")
@@ -179,4 +299,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

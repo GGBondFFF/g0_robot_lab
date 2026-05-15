@@ -216,3 +216,32 @@ It is still not final dynamics:
 5. Validate `projected_gravity` against Isaac Lab for several controlled root orientations.
 6. Re-run zero-action rollout after contact/actuator stabilization.
 
+## Self-Collision Filtering Update
+
+The URDF-derived working model now applies MuJoCo collision filtering to match Isaac Lab's `enabled_self_collisions=False` setting:
+
+```text
+ground: contype=1, conaffinity=2
+robot:  contype=2, conaffinity=1
+```
+
+This keeps robot-ground contacts and disables robot-robot internal contacts. The foot geoms remain mesh geoms from the URDF-derived foot STL assets.
+
+Validation:
+
+```text
+pytest: 11 passed
+validate mujoco/g0.xml: Summary OK
+foot_ground_contacts: 3
+non_ground_self_contacts: 0
+base_link_torso_link_contact: False
+```
+
+Zero-action target alignment remains exact:
+
+```text
+target_joint_pos == default_joint_pos
+max_target_default_abs_err: 0.0
+```
+
+The QACC instability warning still appears, now at `DOF 3` around `Time = 0.0450`. Since internal self-collision is no longer present, the remaining likely causes are actuator parameter mismatch, initial foot-ground penetration, solver/contact parameters, and mass/inertia/root initialization differences.

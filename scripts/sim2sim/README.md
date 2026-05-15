@@ -11,6 +11,8 @@ This directory contains the Isaac Lab to MuJoCo sim2sim validation scaffold for 
 - `compare_isaac_mujoco_rollout.py`: compares Isaac and MuJoCo `.npz` rollouts and writes a Markdown report.
 - `compare_first_frame_observation.py`: compares first-frame observation terms instead of only flattened rollout arrays.
 - `inspect_g0_urdf_for_mujoco.py`: read-only URDF readiness inspection for MuJoCo migration.
+- `inspect_g0_usd_collision.py`: USD/PhysX foot collision inspection. Must be launched through Isaac Lab.
+- `inspect_mujoco_collision.py`: MuJoCo foot geom and initial contact inspection.
 - `generate_g0_mujoco_from_urdf.py`: generates the current URDF-derived `mujoco/g0.xml` working model.
 - `validate_sim2sim_setup.py`: quick structure and interface validator.
 
@@ -58,6 +60,23 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/generate_g0_mujoco_fr
 ```
 
 The generated `mujoco/g0.xml` is a working model, not final dynamics. The preserved interface scaffold is `mujoco/g0_interface_placeholder.xml`.
+
+Inspect contact fidelity:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/inspect_mujoco_collision.py --model mujoco/g0.xml --steps 1
+
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/inspect_g0_usd_collision.py --headless
+```
+
+`mujoco/g0.xml` is generated with Isaac-style self-collision filtering:
+
+```text
+ground: contype=1, conaffinity=2
+robot:  contype=2, conaffinity=1
+```
+
+MuJoCo contacts are enabled when `(contype1 & conaffinity2) || (contype2 & conaffinity1)` is non-zero, so this keeps robot-ground contact and disables robot-robot self-contact. Foot geoms remain URDF-derived mesh geoms; no formal foot box is added.
 
 ## Dump Isaac Golden I/O
 
