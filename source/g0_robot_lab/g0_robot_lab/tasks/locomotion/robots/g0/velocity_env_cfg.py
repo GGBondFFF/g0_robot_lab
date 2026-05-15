@@ -123,26 +123,26 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            # "static_friction_range": (0.3, 1.0),
-            # "dynamic_friction_range": (0.3, 1.0),
-             "static_friction_range": (0.8, 1.0),
-             "dynamic_friction_range": (0.8, 1.0),
+            "static_friction_range": (0.3, 1.0),
+            "dynamic_friction_range": (0.3, 1.0),
+            # "static_friction_range": (0.8, 1.0),
+            # "dynamic_friction_range": (0.8, 1.0),
             "restitution_range": (0.0, 0.0),
-            # "num_buckets": 64,
-            "num_buckets": 32,
+            "num_buckets": 64,
+            # "num_buckets": 32,
         },
     )
     # Keep base mass randomization disable at beginning.
     # Enable it after robot can stand and walk on flat ground.
-    # add_base_mass = EventTerm(
-    #     func=mdp.randomize_rigid_body_mass,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "mass_distribution_params": (-0.2, 0.5),
-    #         "operation": "add",
-    #     },
-    # )
+    add_base_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "mass_distribution_params": (-0.2, 0.5),
+            "operation": "add",
+        },
+    )
 
     # reset
     base_external_force_torque = EventTerm(
@@ -188,14 +188,14 @@ class EventCfg:
 
     # Push is useful later, but it can make first-stage debugging harder.
     # Enable only after default standing and low-speed walking are stable.
-    # push_robot = EventTerm(
-    #     func=mdp.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(5.0, 5.0),
-    #     params={"velocity_range": {
-    #         "x": (-0.5, 0.5),
-    #         "y": (-0.5, 0.5)}},
-    # )
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(5.0, 5.0),
+        params={"velocity_range": {
+            "x": (-0.5, 0.5),
+            "y": (-0.5, 0.5)}},
+    )
 
 ##
 # Commands settings
@@ -210,7 +210,7 @@ class CommandsCfg:
         rel_standing_envs=0.02,
         rel_heading_envs=1.0,
         heading_command=False,
-        debug_vis=False,
+        debug_vis=True,
         ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
             lin_vel_x=(-0.1, 0.1),
             lin_vel_y=(-0.1, 0.1),
@@ -271,7 +271,7 @@ class ObservationsCfg:
             noise=Unoise(n_min=-1.5, n_max=1.5)
         )
         last_action = ObsTerm(func=mdp.last_action)
-        # gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
+        gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
 
         def __post_init__(self):
             self.history_length = 5
@@ -293,7 +293,7 @@ class ObservationsCfg:
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05)
         last_action = ObsTerm(func=mdp.last_action)
-        # gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
+        gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
         # height_scanner = ObsTerm(func=mdp.height_scan,
         #     params={"sensor_cfg": SceneEntityCfg("height_scanner")},
         #     clip=(-1.0, 5.0),
