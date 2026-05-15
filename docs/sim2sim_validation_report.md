@@ -502,3 +502,59 @@ Remaining non-equivalent items:
 - `velocity_limit_sim` is documented but not yet enforced with a verified MuJoCo equivalent.
 - Isaac implicit actuator damping is only approximately represented by MJCF joint damping.
 - Contact solver/friction, mass/inertia, root initialization, `projected_gravity`, and `base_ang_vel` still need separate alignment passes.
+
+## Velocity-Limit And Zero-Action Dynamics Diagnostics
+
+Test time: `2026-05-15 15:48:50 CST`
+
+This pass added diagnostics only. No formal foot collision geometry, actuator gains, damping, friction, or solver parameters were tuned.
+
+Commands:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_mujoco_velocity_limits.py \
+  --rollout logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/mujoco_velocity_limit_report.md
+
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_zero_action_dynamics.py \
+  --isaac logs/sim2sim/isaac_zero_action_golden_io.npz \
+  --mujoco logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/zero_action_dynamics_compare_report.md
+```
+
+Velocity-limit result:
+
+```text
+exceeded joints: 0/22
+worst ratio: 0.0967143 on l_hip_pitch_joint
+```
+
+Zero-action dynamics result:
+
+```text
+target_joint_pos mean/max abs error: 0 / 0
+joint_pos mean/max abs error: 0.0100061 / 0.0607303
+joint_vel mean/max abs error: 0.0523146 / 3.18014
+root_quat mean/max abs error: 0.237017 / 0.696053
+base_ang_vel mean/max abs error: 0.214718 / 4.77339
+projected_gravity mean/max abs error: 0.240835 / 0.999848
+root_height mean/max abs error: 0.0723206 / 0.192692
+```
+
+MuJoCo-side diagnostic ranges:
+
+```text
+qacc min/mean/max: -160.078 / -0.168248 / 358.986
+joint_acc min/mean/max: -160.078 / -0.219228 / 164.065
+contact_count min/mean/max: 0 / 3.37 / 9
+max_contact_force_norm min/mean/max: 0 / 10.0759 / 66.815
+foot_ground_contact_count min/mean/max: 0 / 2.23 / 5
+```
+
+No QACC warning was observed in this 100-step zero-action rollout. `qacc` and `joint_acc` were finite.
+
+Interpretation:
+
+- Velocity limits are not being hit in zero-action.
+- The largest remaining differences are root/frame-sensitive terms: `root_quat`, `projected_gravity`, `base_ang_vel`, and `root_height`.
+- Contact and acceleration terms are currently MuJoCo-side only in the files compared here. Isaac golden export now attempts optional `root_height`, `joint_acc`, and contact-force fields, but the existing golden file should be regenerated if cross-simulator contact/acceleration comparison is needed.

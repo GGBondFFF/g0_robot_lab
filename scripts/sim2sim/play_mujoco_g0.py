@@ -66,6 +66,51 @@ def infer_action(policy, obs: np.ndarray, device: str) -> np.ndarray:
     return action.squeeze(0).detach().cpu().numpy().astype(np.float64)
 
 
+def _mujoco_name(mujoco, model, obj_type, obj_id: int) -> str:
+    if obj_id < 0:
+        return "<none>"
+    value = mujoco.mj_id2name(model, obj_type, int(obj_id))
+    return "<unnamed>" if value is None else value
+
+
+def _body_ancestors(mujoco, model, body_id: int) -> list[str]:
+    names: list[str] = []
+    current = int(body_id)
+    while current > 0:
+        names.append(_mujoco_name(mujoco, model, mujoco.mjtObj.mjOBJ_BODY, current))
+        current = int(model.body_parentid[current])
+    return names
+
+
+def _is_foot_geom(mujoco, model, geom_id: int) -> bool:
+    ancestors = _body_ancestors(mujoco, model, int(model.geom_bodyid[geom_id]))
+    return "l_foot_link" in ancestors or "r_foot_link" in ancestors
+
+
+def collect_contact_diagnostics(interface: G0MuJoCoInterface) -> tuple[int, float, int]:
+    """Return contact count, max normal-force norm, and foot-ground contact count."""
+
+    mujoco = interface.mujoco
+    model = interface.model
+    data = interface.data
+    max_force = 0.0
+    foot_ground_contacts = 0
+    for index in range(data.ncon):
+        contact = data.contact[index]
+        geom1 = int(contact.geom1)
+        geom2 = int(contact.geom2)
+        name1 = _mujoco_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom1)
+        name2 = _mujoco_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom2)
+        is_ground = name1 == "ground" or name2 == "ground"
+        is_foot = _is_foot_geom(mujoco, model, geom1) or _is_foot_geom(mujoco, model, geom2)
+        if is_ground and is_foot:
+            foot_ground_contacts += 1
+        force = np.zeros(6, dtype=np.float64)
+        mujoco.mj_contactForce(model, data, index, force)
+        max_force = max(max_force, float(np.linalg.norm(force[:3])))
+    return int(data.ncon), max_force, foot_ground_contacts
+
+
 def main() -> int:
     args = parse_args()
     model_path = Path(args.model)
@@ -102,6 +147,12 @@ def main() -> int:
         "root_quat": [],
         "base_ang_vel": [],
         "projected_gravity": [],
+        "root_height": [],
+        "qacc": [],
+        "joint_acc": [],
+        "contact_count": [],
+        "max_contact_force_norm": [],
+        "foot_ground_contact_count": [],
         "obs": [],
     }
 
@@ -120,6 +171,15 @@ def main() -> int:
         rows["root_quat"].append(np.full(4, np.nan) if root_quat is None else root_quat)
         rows["base_ang_vel"].append(interface.get_base_ang_vel())
         rows["projected_gravity"].append(interface.get_projected_gravity())
+        rows["root_height"].append(float("nan") if root_pos is None else float(root_pos[2]))
+        rows["qacc"].append(np.asarray(interface.data.qacc, dtype=np.float64).copy())
+        rows["joint_acc"].append(
+            np.asarray([interface.data.qacc[interface.joint_indices[name].qvel] for name in cfg.get_joint_names()], dtype=np.float64)
+        )
+        contact_count, max_contact_force_norm, foot_ground_contact_count = collect_contact_diagnostics(interface)
+        rows["contact_count"].append(contact_count)
+        rows["max_contact_force_norm"].append(max_contact_force_norm)
+        rows["foot_ground_contact_count"].append(foot_ground_contact_count)
         rows["obs"].append(obs.copy())
         if viewer is not None:
             viewer.sync()

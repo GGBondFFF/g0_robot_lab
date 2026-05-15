@@ -150,3 +150,24 @@ Keep the actuator table as a regression artifact, then isolate the next source o
 1. Add diagnostics for velocity-limit behavior rather than assuming `velocity_limit_sim` is equivalent.
 2. Compare MuJoCo and Isaac first-frame joint accelerations/contact forces under zero action.
 3. Tune only solver/contact/friction parameters that can be traced to Isaac/PhysX semantics or measured hardware assumptions.
+
+## Velocity-Limit Diagnostic Follow-Up
+
+The first zero-action velocity-limit diagnostic was added after actuator alignment.
+
+Command:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_mujoco_velocity_limits.py \
+  --rollout logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/mujoco_velocity_limit_report.md
+```
+
+Result:
+
+```text
+exceeded joints: 0/22
+worst ratio: 0.0967143 on l_hip_pitch_joint
+```
+
+Interpretation: zero-action did not approach Isaac `velocity_limit_sim`, so velocity limits are not the immediate cause of the remaining zero-action state differences. MuJoCo velocity-limit enforcement is still a TODO for policy/disturbance tests.

@@ -10,6 +10,8 @@ This directory contains the Isaac Lab to MuJoCo sim2sim validation scaffold for 
 - `dump_isaac_golden_io.py`: Isaac Lab golden I/O dumper. Must be launched through Isaac Lab.
 - `compare_isaac_mujoco_rollout.py`: compares Isaac and MuJoCo `.npz` rollouts and writes a Markdown report.
 - `compare_first_frame_observation.py`: compares first-frame observation terms instead of only flattened rollout arrays.
+- `compare_zero_action_dynamics.py`: compares zero-action state, root, contact, and acceleration diagnostics.
+- `check_mujoco_velocity_limits.py`: reports observed MuJoCo joint velocities against Isaac `velocity_limit_sim`.
 - `inspect_g0_urdf_for_mujoco.py`: read-only URDF readiness inspection for MuJoCo migration.
 - `inspect_g0_usd_collision.py`: USD/PhysX foot collision inspection. Must be launched through Isaac Lab.
 - `inspect_mujoco_collision.py`: MuJoCo foot geom and initial contact inspection.
@@ -203,6 +205,27 @@ Expected zero-action interface result: `action` and `target_joint_pos` compare w
 
 After the first actuator alignment pass, the latest 100-step zero-action rollout did not reproduce the previous MuJoCo `QACC` warning. This is a useful regression signal, not proof that dynamics are final.
 
+Velocity-limit diagnostic:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_mujoco_velocity_limits.py \
+  --rollout logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/mujoco_velocity_limit_report.md
+```
+
+Current zero-action result: `0/22` joints exceeded Isaac `velocity_limit_sim`; worst ratio was about `0.0967`.
+
+Zero-action dynamics diagnostic:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_zero_action_dynamics.py \
+  --isaac logs/sim2sim/isaac_zero_action_golden_io.npz \
+  --mujoco logs/sim2sim/mujoco_zero_action_rollout.npz \
+  --output logs/sim2sim/zero_action_dynamics_compare_report.md
+```
+
+The MuJoCo rollout now records `qacc`, policy-order `joint_acc`, `contact_count`, `max_contact_force_norm`, `foot_ground_contact_count`, and `root_height`. These are diagnostics only and do not change control behavior.
+
 ## Current TODOs
 
 - Calibrate the URDF-derived `mujoco/g0.xml` into a full dynamics model.
@@ -210,3 +233,4 @@ After the first actuator alignment pass, the latest 100-step zero-action rollout
 - Verify base angular velocity frame and scaling against Isaac Lab.
 - Validate actuator velocity-limit semantics.
 - Align contact solver parameters, friction, and mass/inertia.
+- Regenerate Isaac golden I/O with optional acceleration/contact diagnostics before making contact-force conclusions.

@@ -127,10 +127,14 @@ def main() -> int:
             "joint_pos": [],
             "joint_vel": [],
             "root_pos": [],
+            "root_height": [],
             "root_quat": [],
             "base_ang_vel": [],
             "projected_gravity": [],
             "command": [],
+            "joint_acc": [],
+            "contact_force": [],
+            "foot_contact_force": [],
         }
 
         for _ in range(args.steps):
@@ -161,7 +165,9 @@ def main() -> int:
             except Exception as exc:
                 warn_missing("joint_vel", exc)
             try:
-                rows["root_pos"].append(tensor_to_numpy(robot.data.root_pos_w))
+                root_pos = tensor_to_numpy(robot.data.root_pos_w)
+                rows["root_pos"].append(root_pos)
+                rows["root_height"].append(np.asarray(root_pos[2], dtype=np.float64))
             except Exception as exc:
                 warn_missing("root_pos", exc)
             try:
@@ -180,6 +186,16 @@ def main() -> int:
                 rows["command"].append(tensor_to_numpy(env.unwrapped.command_manager.get_command("base_velocity")))
             except Exception as exc:
                 warn_missing("command", exc)
+            try:
+                joint_acc = robot.data.joint_acc
+                rows["joint_acc"].append(tensor_to_numpy(joint_acc[:, joint_indices] if joint_indices is not None else joint_acc))
+            except Exception as exc:
+                warn_missing("joint_acc", exc)
+            try:
+                contact_sensor = env.unwrapped.scene.sensors.get("contact_forces")
+                rows["contact_force"].append(tensor_to_numpy(contact_sensor.data.net_forces_w))
+            except Exception as exc:
+                warn_missing("contact_force", exc)
 
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
