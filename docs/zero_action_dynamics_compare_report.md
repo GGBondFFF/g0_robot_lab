@@ -82,3 +82,60 @@ The largest remaining differences are root and frame-sensitive terms:
 ## Recommendation
 
 Regenerate Isaac golden I/O with the new optional diagnostics, then compare root height, joint acceleration, and contact force terms again. Keep contact/friction/solver tuning separate from observation-frame debugging so each mismatch has a clear cause.
+
+## Deterministic Golden I/O Update
+
+The deterministic Isaac golden file was regenerated with fixed reset and command settings:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/dump_isaac_golden_io.py \
+  --task G0-Velocity-v0 \
+  --steps 100 \
+  --num_envs 1 \
+  --output logs/sim2sim/isaac_zero_action_deterministic_golden_io.npz \
+  --zero-action \
+  --headless \
+  --deterministic-zero \
+  --command 0.0 0.0 0.0
+```
+
+The deterministic compare report is:
+
+```text
+logs/sim2sim/zero_action_dynamics_deterministic_compare_report.md
+```
+
+Key results:
+
+```text
+joint_pos mean/max abs error: 0.0108194 / 0.074113
+joint_vel mean/max abs error: 0.0563463 / 3.12355
+root_quat mean/max abs error: 0.0902682 / 0.694091
+base_ang_vel mean/max abs error: 0.207238 / 4.84762
+projected_gravity mean/max abs error: 0.242127 / 0.999301
+command mean/max abs error: 0 / 0
+target_joint_pos mean/max abs error: 0 / 0
+root_height mean/max abs error: 0.072338 / 0.198734
+joint_acc mean/max abs error: 4.02243 / 165.262
+foot_contact_force_norm mean/max abs error: 4.28525 / 9.19268
+left_foot_contact_force_norm mean/max abs error: 3.03295 / 8.42172
+right_foot_contact_force_norm mean/max abs error: 3.14407 / 6.67445
+```
+
+The command mismatch is removed. Root orientation, projected gravity, base angular velocity, root height, acceleration, and contact-force norms still differ, so the remaining work is now better isolated from command sampling/reset randomization.
+
+MuJoCo foot-force diagnostics are now exported as norms:
+
+```text
+foot_contact_force_norm min/mean/max: 0 / 7.11242 / 13.6471
+left_foot_contact_force_norm min/mean/max: 0 / 4.96319 / 10.6787
+right_foot_contact_force_norm min/mean/max: 0 / 5.06245 / 10.0114
+```
+
+Isaac foot-force diagnostics are exported as vectors and norms:
+
+```text
+foot_contact_force_norm min/mean/max: 0.856135 / 8.72885 / 11.8376
+```
+
+The MuJoCo vector force frame is not yet exported in the same representation as Isaac `net_forces_w`; only the norms are compared in this pass.

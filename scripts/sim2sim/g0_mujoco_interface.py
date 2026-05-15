@@ -243,7 +243,10 @@ class G0MuJoCoInterface:
 
         if self.model.nq < 7:
             return None, None
-        return np.asarray(self.data.qpos[:3], dtype=np.float64), np.asarray(self.data.qpos[3:7], dtype=np.float64)
+        return (
+            np.asarray(self.data.qpos[:3], dtype=np.float64).copy(),
+            np.asarray(self.data.qpos[3:7], dtype=np.float64).copy(),
+        )
 
     def get_base_ang_vel(self) -> np.ndarray:
         """Return MuJoCo freejoint angular velocity for base-frame diagnostics.

@@ -558,3 +558,76 @@ Interpretation:
 - Velocity limits are not being hit in zero-action.
 - The largest remaining differences are root/frame-sensitive terms: `root_quat`, `projected_gravity`, `base_ang_vel`, and `root_height`.
 - Contact and acceleration terms are currently MuJoCo-side only in the files compared here. Isaac golden export now attempts optional `root_height`, `joint_acc`, and contact-force fields, but the existing golden file should be regenerated if cross-simulator contact/acceleration comparison is needed.
+
+## Deterministic Zero-Action Golden I/O Update
+
+Test time: `2026-05-15 17:13 CST`
+
+The Isaac golden dumper now supports deterministic zero-action export without modifying `velocity_env_cfg.py`:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/dump_isaac_golden_io.py \
+  --task G0-Velocity-v0 \
+  --steps 100 \
+  --num_envs 1 \
+  --output logs/sim2sim/isaac_zero_action_deterministic_golden_io.npz \
+  --zero-action \
+  --headless \
+  --deterministic-zero \
+  --command 0.0 0.0 0.0
+```
+
+In-memory deterministic overrides:
+
+```text
+reset_base pose x/y/yaw: fixed to 0
+reset_base velocity: all zero
+reset_robot_joints velocity: zero
+command range: fixed to 0 0 0
+physics material randomization: fixed ranges
+base mass randomization: zero delta
+push_robot interval event: disabled
+policy observation corruption: disabled
+seed: 0
+```
+
+The deterministic file successfully exports:
+
+```text
+root_height
+joint_acc
+contact_force
+foot_contact_force
+left_foot_contact_force
+right_foot_contact_force
+foot_contact_force_norm
+left_foot_contact_force_norm
+right_foot_contact_force_norm
+```
+
+Command is now exactly aligned:
+
+```text
+command mean/max abs error: 0 / 0
+```
+
+Deterministic dynamics compare:
+
+```text
+joint_pos mean/max abs error: 0.0108194 / 0.074113
+joint_vel mean/max abs error: 0.0563463 / 3.12355
+root_quat mean/max abs error: 0.0902682 / 0.694091
+base_ang_vel mean/max abs error: 0.207238 / 4.84762
+projected_gravity mean/max abs error: 0.242127 / 0.999301
+root_height mean/max abs error: 0.072338 / 0.198734
+joint_acc mean/max abs error: 4.02243 / 165.262
+foot_contact_force_norm mean/max abs error: 4.28525 / 9.19268
+```
+
+MuJoCo zero-action rollout still completed without a QACC warning in this pass.
+
+Interpretation:
+
+- Command sampling is no longer a source of mismatch in this deterministic report.
+- Remaining differences are dominated by root orientation/frame terms, root height/contact settling, and acceleration/contact-force behavior.
+- This is still a simulator/model alignment report, not a policy-quality report.

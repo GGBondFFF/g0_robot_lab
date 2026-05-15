@@ -32,6 +32,12 @@ OPTIONAL_KEYS = [
     "foot_ground_contact_count",
     "contact_force",
     "foot_contact_force",
+    "foot_contact_force_norm",
+    "left_foot_contact_force",
+    "right_foot_contact_force",
+    "left_foot_contact_force_norm",
+    "right_foot_contact_force_norm",
+    "total_foot_contact_force_norm",
 ]
 
 
@@ -127,7 +133,17 @@ def main() -> int:
         lines.append(_line(key, isaac[key] if key in isaac.files else None, mujoco[key] if key in mujoco.files else None))
 
     lines.extend(["", "## MuJoCo Diagnostic Ranges", ""])
-    for key in ["qacc", "joint_acc", "contact_count", "max_contact_force_norm", "foot_ground_contact_count"]:
+    for key in [
+        "qacc",
+        "joint_acc",
+        "contact_count",
+        "max_contact_force_norm",
+        "foot_ground_contact_count",
+        "foot_contact_force_norm",
+        "left_foot_contact_force_norm",
+        "right_foot_contact_force_norm",
+        "total_foot_contact_force_norm",
+    ]:
         lines.extend(_summary_series(mujoco, key))
 
     lines.extend(

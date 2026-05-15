@@ -115,8 +115,37 @@ Zero-action dump:
   --num_envs 1 \
   --output logs/sim2sim/isaac_golden_io.npz \
   --zero-action \
-  --headless
+    --headless
 ```
+
+Deterministic zero-action dump:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/dump_isaac_golden_io.py \
+  --task G0-Velocity-v0 \
+  --steps 100 \
+  --num_envs 1 \
+  --output logs/sim2sim/isaac_zero_action_deterministic_golden_io.npz \
+  --zero-action \
+  --headless \
+  --deterministic-zero \
+  --command 0.0 0.0 0.0
+```
+
+`--deterministic-zero` temporarily freezes the in-memory env config for diagnostics:
+
+```text
+reset_base x/y/yaw fixed
+reset_base velocity fixed to zero
+reset_robot_joints velocity fixed to zero
+base_velocity command range fixed to --command
+physics material randomization fixed
+base mass randomization zeroed
+push_robot disabled
+policy observation corruption disabled
+```
+
+It also exports foot contact diagnostics when available: `contact_force`, `foot_contact_force`, left/right foot contact force vectors, and left/right/total foot contact force norms.
 
 Policy dump using exported TorchScript `policy.pt`:
 
@@ -225,6 +254,15 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_zero_action_d
 ```
 
 The MuJoCo rollout now records `qacc`, policy-order `joint_acc`, `contact_count`, `max_contact_force_norm`, `foot_ground_contact_count`, and `root_height`. These are diagnostics only and do not change control behavior.
+
+It also records:
+
+```text
+left_foot_contact_force_norm
+right_foot_contact_force_norm
+total_foot_contact_force_norm
+foot_contact_force_norm
+```
 
 ## Current TODOs
 

@@ -82,19 +82,29 @@ def _body_ancestors(mujoco, model, body_id: int) -> list[str]:
     return names
 
 
-def _is_foot_geom(mujoco, model, geom_id: int) -> bool:
+def _foot_side_for_geom(mujoco, model, geom_id: int) -> str | None:
     ancestors = _body_ancestors(mujoco, model, int(model.geom_bodyid[geom_id]))
-    return "l_foot_link" in ancestors or "r_foot_link" in ancestors
+    if "l_foot_link" in ancestors:
+        return "left"
+    if "r_foot_link" in ancestors:
+        return "right"
+    return None
 
 
-def collect_contact_diagnostics(interface: G0MuJoCoInterface) -> tuple[int, float, int]:
-    """Return contact count, max normal-force norm, and foot-ground contact count."""
+def _is_foot_geom(mujoco, model, geom_id: int) -> bool:
+    return _foot_side_for_geom(mujoco, model, geom_id) is not None
+
+
+def collect_contact_diagnostics(interface: G0MuJoCoInterface) -> tuple[int, float, int, float, float, float]:
+    """Return contact count, force diagnostics, and foot-ground contact count."""
 
     mujoco = interface.mujoco
     model = interface.model
     data = interface.data
     max_force = 0.0
     foot_ground_contacts = 0
+    left_foot_force = np.zeros(3, dtype=np.float64)
+    right_foot_force = np.zeros(3, dtype=np.float64)
     for index in range(data.ncon):
         contact = data.contact[index]
         geom1 = int(contact.geom1)
@@ -102,13 +112,29 @@ def collect_contact_diagnostics(interface: G0MuJoCoInterface) -> tuple[int, floa
         name1 = _mujoco_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom1)
         name2 = _mujoco_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom2)
         is_ground = name1 == "ground" or name2 == "ground"
-        is_foot = _is_foot_geom(mujoco, model, geom1) or _is_foot_geom(mujoco, model, geom2)
+        side1 = _foot_side_for_geom(mujoco, model, geom1)
+        side2 = _foot_side_for_geom(mujoco, model, geom2)
+        is_foot = side1 is not None or side2 is not None
         if is_ground and is_foot:
             foot_ground_contacts += 1
         force = np.zeros(6, dtype=np.float64)
         mujoco.mj_contactForce(model, data, index, force)
-        max_force = max(max_force, float(np.linalg.norm(force[:3])))
-    return int(data.ncon), max_force, foot_ground_contacts
+        world_force = np.asarray(force[:3], dtype=np.float64)
+        max_force = max(max_force, float(np.linalg.norm(world_force)))
+        if is_ground:
+            if side1 == "left" or side2 == "left":
+                left_foot_force += world_force
+            if side1 == "right" or side2 == "right":
+                right_foot_force += world_force
+    total_foot_force_norm = float(np.linalg.norm(np.vstack([left_foot_force, right_foot_force])))
+    return (
+        int(data.ncon),
+        max_force,
+        foot_ground_contacts,
+        float(np.linalg.norm(left_foot_force)),
+        float(np.linalg.norm(right_foot_force)),
+        total_foot_force_norm,
+    )
 
 
 def main() -> int:
@@ -153,6 +179,10 @@ def main() -> int:
         "contact_count": [],
         "max_contact_force_norm": [],
         "foot_ground_contact_count": [],
+        "left_foot_contact_force_norm": [],
+        "right_foot_contact_force_norm": [],
+        "total_foot_contact_force_norm": [],
+        "foot_contact_force_norm": [],
         "obs": [],
     }
 
@@ -176,10 +206,21 @@ def main() -> int:
         rows["joint_acc"].append(
             np.asarray([interface.data.qacc[interface.joint_indices[name].qvel] for name in cfg.get_joint_names()], dtype=np.float64)
         )
-        contact_count, max_contact_force_norm, foot_ground_contact_count = collect_contact_diagnostics(interface)
+        (
+            contact_count,
+            max_contact_force_norm,
+            foot_ground_contact_count,
+            left_foot_force_norm,
+            right_foot_force_norm,
+            total_foot_force_norm,
+        ) = collect_contact_diagnostics(interface)
         rows["contact_count"].append(contact_count)
         rows["max_contact_force_norm"].append(max_contact_force_norm)
         rows["foot_ground_contact_count"].append(foot_ground_contact_count)
+        rows["left_foot_contact_force_norm"].append(left_foot_force_norm)
+        rows["right_foot_contact_force_norm"].append(right_foot_force_norm)
+        rows["total_foot_contact_force_norm"].append(total_foot_force_norm)
+        rows["foot_contact_force_norm"].append(total_foot_force_norm)
         rows["obs"].append(obs.copy())
         if viewer is not None:
             viewer.sync()
