@@ -14,6 +14,7 @@ This directory contains the Isaac Lab to MuJoCo sim2sim validation scaffold for 
 - `inspect_g0_usd_collision.py`: USD/PhysX foot collision inspection. Must be launched through Isaac Lab.
 - `inspect_mujoco_collision.py`: MuJoCo foot geom and initial contact inspection.
 - `generate_g0_mujoco_from_urdf.py`: generates the current URDF-derived `mujoco/g0.xml` working model.
+- `export_g0_actuator_alignment_table.py`: writes an Isaac-vs-MuJoCo actuator parameter table.
 - `validate_sim2sim_setup.py`: quick structure and interface validator.
 
 ## Validate Setup
@@ -60,6 +61,29 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/generate_g0_mujoco_fr
 ```
 
 The generated `mujoco/g0.xml` is a working model, not final dynamics. The preserved interface scaffold is `mujoco/g0_interface_placeholder.xml`.
+
+The generator maps Isaac `G0_CFG` actuator parameters into MJCF:
+
+```text
+stiffness -> position actuator kp
+effort_limit_sim -> position actuator forcerange
+damping -> joint damping, first-pass approximation
+armature -> joint armature
+```
+
+Export the current alignment table:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/export_g0_actuator_alignment_table.py
+```
+
+Expected current summary:
+
+```text
+aligned rows: 22/22
+```
+
+`velocity_limit_sim` is recorded in the table but is not yet an exactly equivalent MuJoCo actuator limit.
 
 Inspect contact fidelity:
 
@@ -177,11 +201,12 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_first_frame_o
 
 Expected zero-action interface result: `action` and `target_joint_pos` compare with zero error. Joint/root state differences are expected while `mujoco/g0.xml` remains an uncalibrated URDF-derived working model.
 
-With the current URDF-derived model, a MuJoCo `QACC` instability warning is also expected until actuator/contact/inertia parameters are aligned. Do not treat that as policy failure.
+After the first actuator alignment pass, the latest 100-step zero-action rollout did not reproduce the previous MuJoCo `QACC` warning. This is a useful regression signal, not proof that dynamics are final.
 
 ## Current TODOs
 
 - Calibrate the URDF-derived `mujoco/g0.xml` into a full dynamics model.
 - Verify projected gravity frame against Isaac Lab.
 - Verify base angular velocity frame and scaling against Isaac Lab.
-- Align actuator PD, torque limits, velocity limits, contact, and friction.
+- Validate actuator velocity-limit semantics.
+- Align contact solver parameters, friction, and mass/inertia.

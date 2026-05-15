@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,19 @@ POLICY_OBS_TERMS = [
 ]
 
 
+@dataclass(frozen=True)
+class IsaacActuatorSpec:
+    """Per-joint actuator parameters resolved from the Isaac G0 configuration."""
+
+    joint_name: str
+    servo_type: str
+    stiffness: float
+    damping: float
+    effort_limit_sim: float
+    velocity_limit_sim: float
+    armature: float
+
+
 def _literal_from_python_file(path: Path, name: str) -> Any:
     """Return a top-level literal assignment from a Python file."""
 
@@ -64,6 +79,82 @@ def _load_actuator_module() -> Any:
     return module
 
 
+def _resolve_g0_name(name: str) -> Any:
+    if name == "G0_JOINT_SDK_NAMES":
+        return G0_JOINT_SDK_NAMES
+    if name == "G0_RIGHT_ANGLE_SERVO_JOINT_NAMES":
+        return G0_RIGHT_ANGLE_SERVO_JOINT_NAMES
+    if name == "G0_STANDARD_SERVO_JOINT_NAMES":
+        return G0_STANDARD_SERVO_JOINT_NAMES
+    raise KeyError(name)
+
+
+def _eval_actuator_keyword(node: ast.AST) -> Any:
+    """Evaluate the small subset of AST nodes used in the G0 actuator config."""
+
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Dict):
+        return {
+            ast.literal_eval(key): float(_eval_actuator_keyword(value))
+            for key, value in zip(node.keys, node.values, strict=True)
+        }
+    if isinstance(node, ast.Name):
+        return _resolve_g0_name(node.id)
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "g0_actuators":
+        return float(getattr(_g0_actuators, node.attr))
+    return ast.literal_eval(node)
+
+
+def _find_actuator_cfg_nodes() -> dict[str, ast.Call]:
+    tree = ast.parse(G0_SOURCE.read_text(encoding="utf-8"), filename=str(G0_SOURCE))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "G0_CFG" for target in node.targets):
+            continue
+        for keyword in node.value.keywords:
+            if keyword.arg == "actuators" and isinstance(keyword.value, ast.Dict):
+                groups: dict[str, ast.Call] = {}
+                for key, value in zip(keyword.value.keys, keyword.value.values, strict=True):
+                    if isinstance(key, ast.Constant) and isinstance(value, ast.Call):
+                        groups[str(key.value)] = value
+                return groups
+    raise RuntimeError(f"Could not find G0_CFG actuator definitions in {G0_SOURCE}")
+
+
+def _extract_actuator_group(group_name: str, node: ast.Call) -> dict[str, Any]:
+    values = {"group_name": group_name}
+    for keyword in node.keywords:
+        if keyword.arg in {
+            "joint_names_expr",
+            "effort_limit_sim",
+            "velocity_limit_sim",
+            "stiffness",
+            "damping",
+            "armature",
+        }:
+            values[keyword.arg] = _eval_actuator_keyword(keyword.value)
+    missing = {
+        "joint_names_expr",
+        "effort_limit_sim",
+        "velocity_limit_sim",
+        "stiffness",
+        "damping",
+        "armature",
+    } - set(values)
+    if missing:
+        raise RuntimeError(f"Actuator group {group_name!r} is missing keys: {sorted(missing)}")
+    return values
+
+
+def _match_pattern_map(joint_name: str, pattern_map: dict[str, float], field_name: str) -> float:
+    for pattern, value in pattern_map.items():
+        if re.fullmatch(pattern, joint_name):
+            return float(value)
+    raise RuntimeError(f"Could not resolve {field_name} for joint {joint_name!r}")
+
+
 def _load_g0_constants() -> tuple[list[str], dict[str, float]]:
     try:
         from g0_robot_lab.assets.robots.g0.g0 import G0_DEFAULT_JOINT_POS, G0_JOINT_SDK_NAMES
@@ -76,6 +167,10 @@ def _load_g0_constants() -> tuple[list[str], dict[str, float]]:
 
 
 G0_JOINT_SDK_NAMES, G0_DEFAULT_JOINT_POS = _load_g0_constants()
+G0_RIGHT_ANGLE_SERVO_JOINT_NAMES = list(_literal_from_python_file(G0_SOURCE, "G0_RIGHT_ANGLE_SERVO_JOINT_NAMES"))
+G0_STANDARD_SERVO_JOINT_NAMES = [
+    name for name in G0_JOINT_SDK_NAMES if name not in G0_RIGHT_ANGLE_SERVO_JOINT_NAMES
+]
 
 try:
     from g0_robot_lab.assets.robots.g0 import g0_actuators as _g0_actuators
@@ -88,12 +183,61 @@ STANDARD_SERVO_MAX_VELOCITY = float(_g0_actuators.STANDARD_SERVO_MAX_VELOCITY)
 RIGHT_ANGLE_SERVO_RATED_TORQUE = float(_g0_actuators.RIGHT_ANGLE_SERVO_RATED_TORQUE)
 RIGHT_ANGLE_SERVO_PEAK_TORQUE = float(_g0_actuators.RIGHT_ANGLE_SERVO_PEAK_TORQUE)
 RIGHT_ANGLE_SERVO_MAX_VELOCITY = float(_g0_actuators.RIGHT_ANGLE_SERVO_MAX_VELOCITY)
+STANDARD_SERVO_ARMATURE = float(_g0_actuators.STANDARD_SERVO_ARMATURE)
+RIGHT_ANGLE_SERVO_ARMATURE = float(_g0_actuators.RIGHT_ANGLE_SERVO_ARMATURE)
+
+_ACTUATOR_GROUPS = {
+    name: _extract_actuator_group(name, node) for name, node in _find_actuator_cfg_nodes().items()
+}
 
 
 def get_joint_names() -> list[str]:
     """Return the G0 policy/action joint names in deployment order."""
 
     return list(G0_JOINT_SDK_NAMES)
+
+
+def get_standard_servo_joint_names() -> list[str]:
+    """Return joints assigned to the standard servo group in ``G0_CFG``."""
+
+    return list(G0_STANDARD_SERVO_JOINT_NAMES)
+
+
+def get_right_angle_servo_joint_names() -> list[str]:
+    """Return joints assigned to the right-angle servo group in ``G0_CFG``."""
+
+    return list(G0_RIGHT_ANGLE_SERVO_JOINT_NAMES)
+
+
+def get_isaac_actuator_specs() -> dict[str, IsaacActuatorSpec]:
+    """Return per-joint actuator specs resolved from the source ``G0_CFG``.
+
+    The function parses the Python source instead of importing ``G0_CFG``
+    directly. Importing ``G0_CFG`` requires Isaac Sim/pxr, while these sim2sim
+    tools must also run in ordinary Python for lightweight tests and reports.
+    """
+
+    group_to_servo = {
+        "standard_servos": "standard",
+        "right_angle_servos": "right_angle",
+    }
+    specs: dict[str, IsaacActuatorSpec] = {}
+    for group_name, group in _ACTUATOR_GROUPS.items():
+        servo_type = group_to_servo.get(group_name, group_name)
+        for joint_name in group["joint_names_expr"]:
+            specs[joint_name] = IsaacActuatorSpec(
+                joint_name=joint_name,
+                servo_type=servo_type,
+                stiffness=_match_pattern_map(joint_name, group["stiffness"], "stiffness"),
+                damping=_match_pattern_map(joint_name, group["damping"], "damping"),
+                effort_limit_sim=float(group["effort_limit_sim"]),
+                velocity_limit_sim=float(group["velocity_limit_sim"]),
+                armature=float(group["armature"]),
+            )
+    missing = [name for name in G0_JOINT_SDK_NAMES if name not in specs]
+    if missing:
+        raise RuntimeError(f"Missing actuator specs for policy joints: {missing}")
+    return {name: specs[name] for name in G0_JOINT_SDK_NAMES}
 
 
 def get_default_joint_pos_array() -> np.ndarray:
@@ -142,4 +286,3 @@ def get_policy_observation_dim() -> int:
     """Return the flattened policy observation width including history."""
 
     return get_single_frame_observation_dim() * POLICY_HISTORY_LENGTH
-

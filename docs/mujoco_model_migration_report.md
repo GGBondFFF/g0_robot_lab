@@ -199,22 +199,22 @@ Remaining first-frame differences:
 
 It is still not final dynamics:
 
-- actuator PD is placeholder
-- torque limits are placeholder
-- velocity limits are placeholder
-- damping and armature are not aligned
-- foot contact geometry is raw mesh-derived and not validated
+- actuator `kp` is mapped from Isaac `G0_CFG` stiffness
+- torque limits are mapped from Isaac `effort_limit_sim` into actuator `forcerange`
+- velocity limits are recorded but not yet enforced with a proven equivalent MuJoCo mechanism
+- damping and armature are mapped from Isaac `G0_CFG` as a first-pass alignment
+- foot contact geometry remains URDF-derived mesh collision and still needs fidelity validation against PhysX cooked collision
 - friction/contact settings are not aligned
 - mass/inertia values need hardware sanity checks
 
 ## Next Priorities
 
-1. Add simplified, realistic foot contact geoms.
-2. Align actuator PD, effort limits, velocity limits, damping, and armature with Isaac Lab `G0_CFG`.
+1. Validate velocity-limit semantics without assuming direct PhysX/MuJoCo equivalence.
+2. Compare first-frame acceleration/contact-force diagnostics after actuator alignment.
 3. Add deterministic Isaac command export or mirror Isaac command sampling in MuJoCo.
 4. Validate `base_ang_vel` frame convention using root quaternion and qvel diagnostics.
 5. Validate `projected_gravity` against Isaac Lab for several controlled root orientations.
-6. Re-run zero-action rollout after contact/actuator stabilization.
+6. Re-run zero-action rollout after each solver/contact/friction change.
 
 ## Self-Collision Filtering Update
 
@@ -245,3 +245,54 @@ max_target_default_abs_err: 0.0
 ```
 
 The QACC instability warning still appears, now at `DOF 3` around `Time = 0.0450`. Since internal self-collision is no longer present, the remaining likely causes are actuator parameter mismatch, initial foot-ground penetration, solver/contact parameters, and mass/inertia/root initialization differences.
+
+## Actuator Alignment Update
+
+The URDF-derived working model now maps Isaac `G0_CFG` actuator parameters into generated MJCF:
+
+```text
+stiffness -> position actuator kp
+effort_limit_sim -> symmetric position actuator forcerange
+damping -> joint damping, first-pass approximation
+armature -> joint armature
+URDF joint range -> actuator ctrlrange
+```
+
+Generated alignment table:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/export_g0_actuator_alignment_table.py
+```
+
+Result:
+
+```text
+aligned rows: 22/22
+```
+
+The formal foot collision geometry was not changed by this pass. `l_foot_link` and `r_foot_link` remain mesh geoms using the URDF-derived STL assets, and no foot box/capsule/sphere was added.
+
+Latest validation after actuator alignment:
+
+```text
+pytest: 11 passed
+validate mujoco/g0.xml: Summary OK, all 22 joints found
+foot_ground_contacts: 3
+non_ground_self_contacts: 0
+zero-action rollout: saved successfully
+QACC warning: not observed in this 100-step zero-action run
+target_joint_pos == default_joint_pos: True
+max_target_default_abs_err: 0.0
+```
+
+Latest short rollout comparison against the existing Isaac zero-action golden I/O:
+
+```text
+action mean/max abs error: 0 / 0
+target_joint_pos mean/max abs error: 0 / 0
+joint_pos mean/max abs error: 0.0100061 / 0.0607303
+joint_vel mean/max abs error: 0.0523146 / 3.18014
+root_height mean/max abs error: 0.18667 / 0.192377
+```
+
+This is an improvement over the previous unstable rollout, but it is still not proof that MuJoCo dynamics are final. `velocity_limit_sim`, solver/contact settings, friction, mass/inertia, and root/frame observation terms remain open alignment work.

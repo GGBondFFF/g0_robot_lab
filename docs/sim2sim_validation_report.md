@@ -430,3 +430,75 @@ WARNING: Nan, Inf or huge value in QACC at DOF 3. The simulation is unstable. Ti
 ```
 
 Since internal self-collision is now filtered out, the next debugging target should be actuator PD/limits and initial foot-ground penetration/contact solver settings.
+
+## Actuator Alignment Validation Update
+
+Test time: `2026-05-15 15:48:50 CST`
+
+The generator now maps Isaac `G0_CFG` actuator parameters into `mujoco/g0.xml`:
+
+```text
+stiffness -> position actuator kp
+effort_limit_sim -> position actuator forcerange
+damping -> joint damping, first-pass approximation
+armature -> joint armature
+```
+
+Validation commands:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python -m pytest tests/sim2sim -q
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/generate_g0_mujoco_from_urdf.py
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/validate_sim2sim_setup.py --model mujoco/g0.xml
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/export_g0_actuator_alignment_table.py
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/inspect_mujoco_collision.py --model mujoco/g0.xml --steps 1
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/play_mujoco_g0.py \
+  --model mujoco/g0.xml \
+  --steps 100 \
+  --command 0.0 0.0 0.0 \
+  --zero-action \
+  --record-rollout logs/sim2sim/mujoco_zero_action_rollout.npz
+```
+
+Results:
+
+```text
+pytest: 11 passed
+validate: Summary OK
+actuator alignment table: 22/22 rows aligned
+foot_ground_contacts: 3
+non_ground_self_contacts: 0
+base_link_torso_link_contact: False
+zero-action rollout: saved successfully
+QACC warning: not observed in this 100-step zero-action run
+```
+
+Zero-action rollout check:
+
+```text
+action shape: (100, 22)
+target_joint_pos shape: (100, 22)
+joint_pos shape: (100, 22)
+target_equals_default: True
+max_target_default_abs_err: 0.0
+max_abs_action: 0.0
+has_nan_inf_joint_pos: False
+```
+
+Latest compare against the existing Isaac golden I/O:
+
+```text
+action mean/max abs error: 0 / 0
+target_joint_pos mean/max abs error: 0 / 0
+joint_pos mean/max abs error: 0.0100061 / 0.0607303
+joint_vel mean/max abs error: 0.0523146 / 3.18014
+root_height mean/max abs error: 0.18667 / 0.192377
+```
+
+Foot collision geometry was not modified. The formal model still uses the URDF-derived foot mesh geoms and no formal foot box/capsule/sphere was added.
+
+Remaining non-equivalent items:
+
+- `velocity_limit_sim` is documented but not yet enforced with a verified MuJoCo equivalent.
+- Isaac implicit actuator damping is only approximately represented by MJCF joint damping.
+- Contact solver/friction, mass/inertia, root initialization, `projected_gravity`, and `base_ang_vel` still need separate alignment passes.
