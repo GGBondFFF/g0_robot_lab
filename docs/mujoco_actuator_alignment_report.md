@@ -143,6 +143,44 @@ This preserves robot-ground contact and disables robot-robot internal contact, m
 - Friction, mass/inertia sanity, and root initialization still need dedicated validation.
 - `projected_gravity` and `base_ang_vel` frame equivalence still need controlled diagnostics.
 
+## Deploy-Style PD Command Follow-Up
+
+The Unitree-style deploy runner now records the motor command fields that were implicit in the earlier position-actuator rollout:
+
+```text
+q_des
+dq_des
+kp
+kd
+tau_ff
+tau_cmd
+tau_cmd_clipped
+```
+
+The recorded equation is:
+
+```text
+tau_cmd = tau_ff + kp * (q_des - q) + kd * (dq_des - dq)
+```
+
+with `tau_ff = 0`. This does not change the formal actuator parameters in `mujoco/g0.xml`.
+
+Two control backends are now available:
+
+- `position`: writes `q_des` into the existing position actuators and records the PD torque diagnostics.
+- `pd_torque`: generates `mujoco/g0_pd_torque.xml` with motor actuators and writes `tau_cmd_clipped` to MuJoCo control.
+
+Validation results from the first deploy pass:
+
+```text
+zero-action position: check OK, max_target_default_abs_err=0
+zero-action pd_torque: check OK, max_target_default_abs_err=0
+policy position: 200 steps completed, check OK
+policy pd_torque: 200 steps completed, check OK
+```
+
+No kp, damping, friction, solver, root-height, or foot collision tuning was performed for these results.
+
 ## Next Step
 
 Keep the actuator table as a regression artifact, then isolate the next source of mismatch with one change at a time:

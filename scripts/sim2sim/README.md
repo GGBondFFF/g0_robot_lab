@@ -17,6 +17,9 @@ This directory contains the Isaac Lab to MuJoCo sim2sim validation scaffold for 
 - `inspect_mujoco_collision.py`: MuJoCo foot geom and initial contact inspection.
 - `generate_g0_mujoco_from_urdf.py`: generates the current URDF-derived `mujoco/g0.xml` working model.
 - `export_g0_actuator_alignment_table.py`: writes an Isaac-vs-MuJoCo actuator parameter table.
+- `export_g0_deploy_cfg.py`: exports a Unitree-style `deploy.yaml` from the Isaac Lab G0 env.
+- `run_g0_mujoco_deploy.py`: deploy-style MuJoCo runner that records LowCmd-like PD fields.
+- `check_g0_deploy_rollout.py`: checks deploy rollout shape, action processing, PD command clipping, and zero-action metrics.
 - `validate_sim2sim_setup.py`: quick structure and interface validator.
 
 ## Validate Setup
@@ -187,6 +190,60 @@ python scripts/sim2sim/play_mujoco_g0.py \
 ```
 
 ONNX rollout is intentionally left as TODO.
+
+## Unitree-Style Deploy Rollout
+
+Export G0 deploy metadata from Isaac Lab:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/export_g0_deploy_cfg.py \
+  --task G0-Velocity-v0 \
+  --output logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --headless
+```
+
+Run zero-action deploy rollout in the current position-actuator backend:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_mujoco_deploy.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --steps 200 \
+  --command 0.0 0.0 0.0 \
+  --zero-action \
+  --control-mode position \
+  --record-rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_position_rollout.npz
+```
+
+Check it:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_g0_deploy_rollout.py \
+  --rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_position_rollout.npz \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --output logs/sim2sim/g0_deploy/deploy_zero_action_position_check.md
+```
+
+Run the first torque-backend pass:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_mujoco_deploy.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --steps 200 \
+  --command 0.0 0.0 0.0 \
+  --zero-action \
+  --control-mode pd_torque \
+  --record-rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_pd_torque_rollout.npz
+```
+
+`pd_torque` mode generates `mujoco/g0_pd_torque.xml` and writes:
+
+```text
+tau_cmd = tau_ff + kp * (q_des - q) + kd * (dq_des - dq)
+```
+
+with `tau_ff = 0` and effort-limit clipping. The formal `mujoco/g0.xml` and foot mesh collision are not modified.
 
 ## Compare Rollouts
 

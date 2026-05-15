@@ -258,6 +258,85 @@ This only validates that the TorchScript policy can run through the MuJoCo scaff
 
 ## Confirmed Aligned
 
+## Deploy-Style Sim2sim Follow-Up
+
+This pass added a Unitree-style deploy entrypoint while preserving the existing direct MuJoCo runner.
+
+Commands run:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python -m pytest tests/sim2sim -q
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/validate_sim2sim_setup.py --model mujoco/g0.xml
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/export_g0_deploy_cfg.py \
+  --task G0-Velocity-v0 \
+  --output logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --headless
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_mujoco_deploy.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --steps 200 \
+  --command 0.0 0.0 0.0 \
+  --zero-action \
+  --control-mode position \
+  --record-rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_position_rollout.npz
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_g0_deploy_rollout.py \
+  --rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_position_rollout.npz \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --output logs/sim2sim/g0_deploy/deploy_zero_action_position_check.md
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_mujoco_deploy.py \
+  --model mujoco/g0.xml \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --steps 200 \
+  --command 0.0 0.0 0.0 \
+  --zero-action \
+  --control-mode pd_torque \
+  --record-rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_pd_torque_rollout.npz
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_g0_deploy_rollout.py \
+  --rollout logs/sim2sim/g0_deploy/mujoco_deploy_zero_action_pd_torque_rollout.npz \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --output logs/sim2sim/g0_deploy/deploy_zero_action_pd_torque_check.md
+```
+
+Policy rollout commands also completed for:
+
+```text
+logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt
+```
+
+Results:
+
+```text
+pytest: 11 passed
+validate_sim2sim_setup.py: Summary OK
+deploy.yaml: exported, obs_dim=385, joints=22
+zero-action position rollout: completed 200 steps, check OK
+zero-action pd_torque rollout: completed 200 steps, check OK
+policy position rollout: completed 200 steps, check OK
+policy pd_torque rollout: completed 200 steps, check OK
+```
+
+The deploy runner now records the LowCmd-style fields:
+
+```text
+pd_q_des
+pd_dq_des
+pd_kp
+pd_kd
+pd_tau_ff
+pd_tau_cmd
+pd_tau_cmd_clipped
+```
+
+Control equation:
+
+```text
+tau_cmd = tau_ff + kp * (q_des - q) + kd * (dq_des - dq)
+```
+
+with `tau_ff = 0`. Raw `tau_cmd` can exceed `effort_limit_sim`; `pd_tau_cmd_clipped` is clipped and checked against the effort limits.
+
+This is now a deploy-style MuJoCo sim2sim validation entrypoint. It is still not a Unitree DDS/C++ ONNX deployment stack.
+
 - sim2sim framework files are present.
 - `G0_JOINT_SDK_NAMES` dimension is 22.
 - default joint position dimension is 22.

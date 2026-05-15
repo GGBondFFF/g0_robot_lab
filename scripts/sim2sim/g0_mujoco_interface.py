@@ -197,6 +197,23 @@ class G0MuJoCoInterface:
         for index, name in enumerate(self.joint_names):
             self.data.ctrl[self.joint_indices[name].actuator] = target_joint_pos[index]
 
+    def set_torque_command(self, torque: np.ndarray) -> None:
+        """Set MuJoCo actuator controls as torques in policy/action order."""
+
+        torque = np.asarray(torque, dtype=np.float64)
+        if torque.shape != (cfg.get_action_dim(),):
+            raise ValueError(f"torque shape must be ({cfg.get_action_dim()},), got {torque.shape}")
+        for index, name in enumerate(self.joint_names):
+            self.data.ctrl[self.joint_indices[name].actuator] = torque[index]
+
+    def step_control_interval(self) -> None:
+        """Advance MuJoCo for one Isaac control interval."""
+
+        substeps = max(1, int(round(cfg.CONTROL_DT / float(self.model.opt.timestep))))
+        for _ in range(substeps):
+            self.mujoco.mj_step(self.model, self.data)
+        self.sim_time += cfg.CONTROL_DT
+
     def apply_policy_action(self, action: np.ndarray) -> np.ndarray:
         """Apply a policy action and return the target joint position."""
 
@@ -232,10 +249,7 @@ class G0MuJoCoInterface:
         if action is None:
             action = self.last_action
         target_joint_pos = self.apply_policy_action(action)
-        substeps = max(1, int(round(cfg.CONTROL_DT / float(self.model.opt.timestep))))
-        for _ in range(substeps):
-            self.mujoco.mj_step(self.model, self.data)
-        self.sim_time += cfg.CONTROL_DT
+        self.step_control_interval()
         return self.build_observation(), target_joint_pos
 
     def get_root_pose(self) -> tuple[np.ndarray | None, np.ndarray | None]:
