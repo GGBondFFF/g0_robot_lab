@@ -105,7 +105,7 @@ Policy rollout:
 TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_mujoco_deploy.py \
   --model mujoco/g0.xml \
   --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
-  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --policy /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 200 \
   --command 0.0 0.0 0.0 \
   --device cpu \
@@ -149,7 +149,7 @@ Zero-action pd_torque mode:
 
 Policy rollout:
 
-- `policy.pt`: `logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt`
+- checkpoint: `/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt`
 - Position mode: completed 200 deploy steps and check OK.
 - PD torque mode: completed 200 deploy steps and check OK.
 - This validates startup and command recording, not walking quality.
@@ -168,7 +168,7 @@ Command:
 TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validation_matrix.py \
   --model mujoco/g0.xml \
   --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
-  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --policy /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 200 \
   --output-dir logs/sim2sim/g0_deploy/validation_matrix
 ```

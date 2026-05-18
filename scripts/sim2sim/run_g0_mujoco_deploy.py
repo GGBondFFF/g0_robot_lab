@@ -18,9 +18,13 @@ if str(REPO_ROOT) not in sys.path:
 
 try:
     from scripts.sim2sim.g0_mujoco_interface import G0MuJoCoInterface
+    from scripts.sim2sim.policy_io import load_policy as load_explicit_policy
+    from scripts.sim2sim.policy_io import policy_metadata, require_absolute_path
     from scripts.sim2sim.play_mujoco_g0 import collect_contact_diagnostics
 except ModuleNotFoundError:
     from g0_mujoco_interface import G0MuJoCoInterface
+    from policy_io import load_policy as load_explicit_policy
+    from policy_io import policy_metadata, require_absolute_path
     from play_mujoco_g0 import collect_contact_diagnostics
 
 
@@ -28,9 +32,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="mujoco/g0.xml", help="Path to MuJoCo XML model.")
     parser.add_argument("--deploy-cfg", default="logs/sim2sim/g0_deploy/params/deploy.yaml", help="Path to deploy.yaml.")
-    parser.add_argument("--policy", default=None, help="Path to policy.pt or policy.onnx.")
+    parser.add_argument("--policy", default=None, help="Absolute path to policy/checkpoint. Required unless --zero-action is set.")
     parser.add_argument("--steps", type=int, default=500, help="Number of control steps.")
     parser.add_argument("--command", nargs=3, type=float, default=[0.0, 0.0, 0.0], help="lin_x lin_y yaw command.")
+    parser.add_argument("--task", default="G0-Velocity-v0", help="Task id recorded in rollout metadata.")
     parser.add_argument("--zero-action", action="store_true", help="Use zero policy action.")
     parser.add_argument("--record-rollout", default="logs/sim2sim/g0_deploy/mujoco_deploy_rollout.npz", help="Output .npz path.")
     parser.add_argument("--device", default="cpu", help="Torch device for policy.pt inference.")
@@ -67,9 +72,7 @@ def as_vector(values: Any, expected: int, name: str) -> np.ndarray:
 def load_policy(policy_path: str | None, device: str):
     if policy_path is None:
         return None, "zero"
-    path = Path(policy_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Policy file does not exist: {path}")
+    path = require_absolute_path(policy_path, "--policy")
     if path.suffix == ".onnx":
         try:
             import onnxruntime as ort
@@ -78,13 +81,8 @@ def load_policy(policy_path: str | None, device: str):
         session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
         return session, "onnx"
 
-    try:
-        import torch
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError("Torch is required to load policy.pt. Use --zero-action to run without torch.") from exc
-    policy = torch.jit.load(str(path), map_location=device)
-    policy.eval()
-    return policy, "torchscript"
+    policy, policy_kind = load_explicit_policy(path, device)
+    return policy, policy_kind
 
 
 def infer_policy(policy: Any, policy_kind: str, obs: np.ndarray, action_dim: int, device: str) -> np.ndarray:
@@ -290,6 +288,14 @@ def main() -> int:
 
     output = Path(args.record_rollout)
     output.parent.mkdir(parents=True, exist_ok=True)
+    metadata = policy_metadata(
+        None if args.zero_action else args.policy,
+        task=args.task,
+        command=np.asarray(args.command, dtype=np.float64),
+        steps=args.steps,
+    )
+    for duplicate_key in ("command", "joint_names", "action_scale"):
+        metadata.pop(duplicate_key, None)
     np.savez(
         output,
         **{key: np.asarray(value) for key, value in rows.items()},
@@ -297,11 +303,11 @@ def main() -> int:
         default_joint_pos=offset,
         joint_names=np.asarray(joint_names),
         deploy_yaml_path=np.asarray(str(Path(args.deploy_cfg))),
-        policy_path=np.asarray("" if args.policy is None else str(Path(args.policy))),
         control_mode=np.asarray(args.control_mode),
         sim_dt=np.asarray(interface.model.opt.timestep),
         control_dt=np.asarray(float(deploy_cfg["step_dt"])),
         decimation=np.asarray(int(deploy_cfg["decimation"])),
+        **metadata,
     )
     print(f"Saved deploy MuJoCo rollout: {output}")
     print(f"Finished {args.steps} deploy control steps in {args.control_mode} mode.")

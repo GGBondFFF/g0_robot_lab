@@ -26,7 +26,7 @@ if str(REPO_ROOT) not in sys.path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", default="G0-Velocity-v0", help="Isaac Lab task id.")
-    parser.add_argument("--checkpoint", default=None, help="Exported TorchScript policy.pt path. RSL-RL checkpoints are TODO.")
+    parser.add_argument("--checkpoint", default=None, help="Absolute path to TorchScript policy or raw RSL-RL checkpoint.")
     parser.add_argument("--steps", type=int, default=100, help="Number of control steps to dump.")
     parser.add_argument("--num_envs", type=int, default=1, help="Number of Isaac environments. Use 1 for golden I/O.")
     parser.add_argument("--output", default="logs/sim2sim/isaac_golden_io.npz", help="Output .npz path.")
@@ -61,25 +61,6 @@ def extract_policy_obs(obs: Any) -> np.ndarray:
         first_key = next(iter(obs))
         return tensor_to_numpy(obs[first_key])
     return tensor_to_numpy(obs)
-
-
-def load_torchscript_policy(path: str | None, device: str):
-    if path is None:
-        return None
-    policy_path = Path(path)
-    if not policy_path.exists():
-        raise FileNotFoundError(f"Policy/checkpoint does not exist: {policy_path}")
-    try:
-        import torch
-
-        policy = torch.jit.load(str(policy_path), map_location=device)
-        policy.eval()
-        return policy
-    except Exception as exc:
-        raise RuntimeError(
-            "Only exported TorchScript policy.pt is supported here. "
-            "Raw RSL-RL training checkpoints should first be exported by scripts/rsl_rl/play.py."
-        ) from exc
 
 
 def safe_get_joint_indices(robot, joint_names: list[str]) -> list[int] | None:
@@ -218,7 +199,7 @@ def main() -> int:
         print("ERROR: --steps must be positive.", file=sys.stderr)
         return 2
     if args.checkpoint is None and not args.zero_action:
-        print("ERROR: provide --checkpoint or use --zero-action.", file=sys.stderr)
+        print("ERROR: provide --checkpoint as an absolute path, or use --zero-action.", file=sys.stderr)
         return 2
 
     from isaaclab.app import AppLauncher
@@ -233,6 +214,10 @@ def main() -> int:
     import g0_robot_lab.tasks  # noqa: F401
     from g0_robot_lab.tasks.locomotion.robots.g0.velocity_env_cfg import G0RobotLabEnvCfg
     from scripts.sim2sim import g0_sim2sim_config as cfg
+    from scripts.sim2sim.policy_io import load_policy, policy_metadata, require_absolute_path
+
+    if args.checkpoint is not None:
+        require_absolute_path(args.checkpoint, "--checkpoint")
 
     env = None
     try:
@@ -243,7 +228,7 @@ def main() -> int:
             deterministic_overrides = configure_deterministic_zero(env_cfg, args)
         env = gym.make(args.task, cfg=env_cfg)
         device = getattr(env.unwrapped, "device", "cpu")
-        policy = load_torchscript_policy(args.checkpoint, str(device))
+        policy = None if args.zero_action else load_policy(args.checkpoint, str(device))[0]
 
         obs, _ = env.reset()
         robot = env.unwrapped.scene["robot"]
@@ -341,17 +326,23 @@ def main() -> int:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
         arrays = {key: np.asarray(value) for key, value in rows.items() if value}
+        metadata = policy_metadata(
+            None if args.zero_action else args.checkpoint,
+            task=args.task,
+            command=np.asarray(args.command, dtype=np.float64),
+            steps=args.steps,
+        )
+        metadata.pop("command", None)
         np.savez(
             output,
             **arrays,
             default_joint_pos=cfg.get_default_joint_pos_array(),
-            joint_names=np.asarray(cfg.get_joint_names()),
-            action_scale=np.asarray(cfg.ACTION_SCALE),
             sim_dt=np.asarray(cfg.ISAAC_SIM_DT),
             decimation=np.asarray(cfg.ISAAC_DECIMATION),
             control_dt=np.asarray(cfg.CONTROL_DT),
             deterministic_zero=np.asarray(bool(args.deterministic_zero)),
             deterministic_overrides=np.asarray(str(deterministic_overrides)),
+            **metadata,
         )
         print(f"Saved Isaac golden I/O: {output}")
         return 0

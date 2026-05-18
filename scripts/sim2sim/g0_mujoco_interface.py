@@ -22,15 +22,7 @@ except ModuleNotFoundError:
     import g0_sim2sim_config as cfg
 
 
-TERM_SLICES = {
-    "base_ang_vel": slice(0, 3),
-    "projected_gravity": slice(3, 6),
-    "velocity_commands": slice(6, 9),
-    "joint_pos_rel": slice(9, 31),
-    "joint_vel_rel": slice(31, 53),
-    "last_action": slice(53, 75),
-    "gait_phase": slice(75, 77),
-}
+TERM_SLICES = cfg.get_observation_term_slices()
 
 
 def import_mujoco() -> Any:
@@ -239,9 +231,7 @@ class G0MuJoCoInterface:
         else:
             self._history.append(frame)
         self._history = self._history[-cfg.POLICY_HISTORY_LENGTH :]
-        return np.concatenate(
-            [np.concatenate([history_frame[term_slice] for history_frame in self._history]) for term_slice in TERM_SLICES.values()]
-        )
+        return cfg.flatten_history_term_major(self._history)
 
     def step(self, action: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Apply an optional action, step MuJoCo for one control interval, and return obs/target."""
@@ -251,6 +241,24 @@ class G0MuJoCoInterface:
         target_joint_pos = self.apply_policy_action(action)
         self.step_control_interval()
         return self.build_observation(), target_joint_pos
+
+    def step_position_target(
+        self,
+        target_joint_pos: np.ndarray,
+        last_action: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Replay an already processed joint-position target for one control interval."""
+
+        target_joint_pos = np.asarray(target_joint_pos, dtype=np.float64)
+        if target_joint_pos.shape != (cfg.get_action_dim(),):
+            raise ValueError(f"target_joint_pos shape must be ({cfg.get_action_dim()},), got {target_joint_pos.shape}")
+        self.set_position_target(target_joint_pos)
+        if last_action is not None:
+            last_action = np.asarray(last_action, dtype=np.float64)
+            cfg.validate_action_shape(last_action)
+            self.last_action = np.clip(last_action, -1.0, 1.0)
+        self.step_control_interval()
+        return self.build_observation()
 
     def get_root_pose(self) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Return root position and quaternion when a free root joint is available."""

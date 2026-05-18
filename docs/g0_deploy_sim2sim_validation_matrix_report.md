@@ -4,7 +4,7 @@
 
 - model: `mujoco/g0.xml`
 - deploy_cfg: `logs/sim2sim/g0_deploy/params/deploy.yaml`
-- policy: `logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt`
+- policy: `/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt`
 - steps per case: `500`
 - output_dir: `logs/sim2sim/g0_deploy/validation_matrix_500`
 

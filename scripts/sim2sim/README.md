@@ -151,19 +151,19 @@ policy observation corruption disabled
 
 It also exports foot contact diagnostics when available: `contact_force`, `foot_contact_force`, left/right foot contact force vectors, and left/right/total foot contact force norms.
 
-Policy dump using exported TorchScript `policy.pt`:
+Policy dump using the pinned absolute raw RSL-RL checkpoint:
 
 ```bash
 /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/dump_isaac_golden_io.py \
   --task G0-Velocity-v0 \
-  --checkpoint logs/rsl_rl/g0_velocity/<run>/exported/policy.pt \
+  --checkpoint /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 100 \
   --num_envs 1 \
   --output logs/sim2sim/isaac_golden_io.npz \
   --headless
 ```
 
-Raw RSL-RL checkpoints should first be exported with `scripts/rsl_rl/play.py`.
+Sim2sim checkpoint identity audits must not use `latest`, a relative checkpoint path, or exported `policy.pt`.
 
 ## Run MuJoCo Rollout
 
@@ -178,12 +178,12 @@ python scripts/sim2sim/play_mujoco_g0.py \
   --record-rollout logs/sim2sim/mujoco_rollout.npz
 ```
 
-TorchScript policy rollout:
+Pinned checkpoint policy rollout:
 
 ```bash
 python scripts/sim2sim/play_mujoco_g0.py \
   --model mujoco/g0.xml \
-  --policy logs/rsl_rl/g0_velocity/<run>/exported/policy.pt \
+  --policy /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 1000 \
   --command 0.0 0.0 0.0 \
   --device cpu \
@@ -252,7 +252,7 @@ Run the deploy validation matrix:
 TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validation_matrix.py \
   --model mujoco/g0.xml \
   --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
-  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --policy /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 200 \
   --output-dir logs/sim2sim/g0_deploy/validation_matrix
 ```

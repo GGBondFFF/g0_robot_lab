@@ -43,6 +43,76 @@ POLICY_OBS_TERMS = [
     "last_action",
     "gait_phase",
 ]
+POLICY_OBS_TERM_DIMS = {
+    "base_ang_vel": 3,
+    "projected_gravity": 3,
+    "velocity_commands": 3,
+    "joint_pos_rel": 22,
+    "joint_vel_rel": 22,
+    "last_action": 22,
+    "gait_phase": 2,
+}
+
+
+def get_observation_term_slices() -> dict[str, slice]:
+    """Return per-frame observation slices in Isaac policy term order."""
+
+    start = 0
+    slices: dict[str, slice] = {}
+    for term in POLICY_OBS_TERMS:
+        dim = POLICY_OBS_TERM_DIMS[term]
+        slices[term] = slice(start, start + dim)
+        start += dim
+    return slices
+
+
+def flatten_history_term_major(frames: list[np.ndarray] | np.ndarray) -> np.ndarray:
+    """Flatten observation history exactly like Isaac Lab grouped history.
+
+    Isaac Lab keeps a history buffer for each observation term, flattens that
+    term's history from oldest to newest, and then concatenates terms in config
+    order. It is term-major, not full-frame-major.
+    """
+
+    frames = np.asarray(frames, dtype=np.float64)
+    expected = (POLICY_HISTORY_LENGTH, get_single_frame_observation_dim())
+    if frames.shape != expected:
+        raise ValueError(f"Expected history frames shape {expected}, got {frames.shape}")
+    return np.concatenate(
+        [
+            np.concatenate([frame[term_slice] for frame in frames])
+            for term_slice in get_observation_term_slices().values()
+        ]
+    )
+
+
+def split_policy_observation(obs: np.ndarray) -> dict[str, np.ndarray]:
+    """Split a single flattened policy observation into term histories.
+
+    The returned arrays have shape ``(history_length, term_dim)`` for history
+    observations and ``(1, term_dim)`` for a single non-history frame.
+    """
+
+    obs = np.asarray(obs, dtype=np.float64).reshape(-1)
+    frame_width = get_single_frame_observation_dim()
+    if obs.shape == (frame_width,):
+        return {
+            term: obs[term_slice].reshape(1, -1)
+            for term, term_slice in get_observation_term_slices().items()
+        }
+    if obs.shape != (get_policy_observation_dim(),):
+        raise ValueError(
+            f"Expected observation width {frame_width} or {get_policy_observation_dim()}, got {obs.shape}"
+        )
+
+    result: dict[str, np.ndarray] = {}
+    offset = 0
+    for term in POLICY_OBS_TERMS:
+        dim = POLICY_OBS_TERM_DIMS[term]
+        width = dim * POLICY_HISTORY_LENGTH
+        result[term] = obs[offset : offset + width].reshape(POLICY_HISTORY_LENGTH, dim)
+        offset += width
+    return result
 
 
 @dataclass(frozen=True)

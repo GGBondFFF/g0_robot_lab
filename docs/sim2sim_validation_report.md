@@ -70,7 +70,7 @@ Policy rollout:
 ```bash
 TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/play_mujoco_g0.py \
   --model mujoco/g0.xml \
-  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --policy /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 100 \
   --command 0.0 0.0 0.0 \
   --device cpu \
@@ -236,10 +236,10 @@ Interpretation:
 
 ## Policy Rollout
 
-Existing exported policy used:
+Pinned checkpoint used for checkpoint identity audits:
 
 ```text
-logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt
+/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt
 ```
 
 Output:
@@ -300,7 +300,7 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/check_g0_deploy_rollo
 Policy rollout commands also completed for:
 
 ```text
-logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt
+/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt
 ```
 
 Results:
@@ -347,7 +347,7 @@ Command:
 TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validation_matrix.py \
   --model mujoco/g0.xml \
   --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
-  --policy logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt \
+  --policy /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
   --steps 200 \
   --output-dir logs/sim2sim/g0_deploy/validation_matrix
 ```

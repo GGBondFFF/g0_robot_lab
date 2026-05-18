@@ -87,13 +87,13 @@ Template:
 /home/lz/IsaacLab/isaaclab.sh -p scripts/rsl_rl/play.py \
   --task G0-Velocity-v0 \
   --num_envs 32 \
-  --checkpoint <checkpoint-path>
+  --checkpoint /home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt
 ```
 
-Example using the latest saved checkpoint:
+Example using the pinned checkpoint for sim2sim identity audits:
 
 ```bash
-CKPT=$(find logs/rsl_rl/g0_velocity -name "model_*.pt" | sort | tail -1)
+CKPT=/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt
 
 /home/lz/IsaacLab/isaaclab.sh -p scripts/rsl_rl/play.py \
   --task G0-Velocity-v0 \

@@ -17,6 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.sim2sim.policy_io import policy_metadata, require_absolute_path
+
 
 COMMANDS = [
     (0.0, 0.0, 0.0),
@@ -42,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="mujoco/g0.xml", help="Path to MuJoCo XML model.")
     parser.add_argument("--deploy-cfg", default="logs/sim2sim/g0_deploy/params/deploy.yaml", help="Path to deploy.yaml.")
-    parser.add_argument("--policy", default="logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt", help="TorchScript policy.pt path.")
+    parser.add_argument("--policy", default=None, help="Absolute path to policy/checkpoint. Required for policy matrix cases.")
     parser.add_argument("--steps", type=int, default=200, help="Control steps per case.")
     parser.add_argument("--output-dir", default="logs/sim2sim/g0_deploy/validation_matrix", help="Directory for rollouts and checks.")
     parser.add_argument("--report", default="docs/g0_deploy_sim2sim_validation_matrix_report.md", help="Markdown summary report path.")
@@ -220,11 +222,33 @@ def write_report(path: Path, records: list[dict[str, Any]], args: argparse.Names
         "",
         "This report validates the deploy-style MuJoCo runtime. It does not tune policy quality or physics parameters.",
         "",
+    ]
+    if args.policy is not None:
+        identity = policy_metadata(args.policy, task="G0-Velocity-v0", command=(0.0, 0.0, 0.0), steps=args.steps)
+        lines.extend(
+            [
+                "## Policy Identity",
+                "",
+                f"- policy_path: `{str(identity['policy_path'].item())}`",
+                f"- policy_filename: `{str(identity['policy_filename'].item())}`",
+                f"- policy_sha256: `{str(identity['policy_sha256'].item())}`",
+                f"- checkpoint_run_folder: `{str(identity['checkpoint_run_folder'].item())}`",
+                f"- task: `{str(identity['task'].item())}`",
+                f"- steps: `{int(identity['steps'].item())}`",
+                f"- action_dim: `{int(identity['action_dim'].item())}`",
+                f"- obs_dim: `{int(identity['obs_dim'].item())}`",
+                f"- action_scale: `{float(identity['action_scale'].item())}`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
         "## Case Matrix",
         "",
         "| case | run | check | action max | action sat | torque max | torque sat | vel exceeded | root h min/final | contacts mean/max | foot force mean/max | early fall |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
-    ]
+        ]
+    )
     for record in records:
         m = record.get("metrics", {})
         if not m:
@@ -376,6 +400,14 @@ def main() -> int:
     args = parse_args()
     if args.steps <= 0:
         print("ERROR: --steps must be positive.", file=sys.stderr)
+        return 2
+    if args.policy is None:
+        print("ERROR: --policy is required and must be an absolute path for policy matrix cases.", file=sys.stderr)
+        return 2
+    try:
+        args.policy = str(require_absolute_path(args.policy, "--policy"))
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     deploy_cfg = load_deploy_cfg(args.deploy_cfg)
     output_dir = Path(args.output_dir)

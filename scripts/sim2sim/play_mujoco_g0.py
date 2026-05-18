@@ -16,41 +16,37 @@ if str(REPO_ROOT) not in sys.path:
 try:
     from scripts.sim2sim import g0_sim2sim_config as cfg
     from scripts.sim2sim.g0_mujoco_interface import G0MuJoCoInterface
+    from scripts.sim2sim.policy_io import (
+        load_policy,
+        metadata_from_npz,
+        policy_metadata,
+        require_absolute_path,
+    )
 except ModuleNotFoundError:
     import g0_sim2sim_config as cfg
     from g0_mujoco_interface import G0MuJoCoInterface
+    from policy_io import load_policy, metadata_from_npz, policy_metadata, require_absolute_path
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="mujoco/g0.xml", help="Path to MuJoCo XML model.")
-    parser.add_argument("--policy", default=None, help="Path to TorchScript policy.pt. ONNX is reserved for later.")
+    parser.add_argument("--policy", default=None, help="Absolute path to policy/checkpoint. Required for live policy mode.")
     parser.add_argument("--steps", type=int, default=1000, help="Number of control steps to run.")
     parser.add_argument("--command", nargs=3, type=float, default=[0.0, 0.0, 0.0], help="lin_x lin_y yaw command.")
+    parser.add_argument("--task", default="G0-Velocity-v0", help="Task id recorded in rollout metadata.")
     parser.add_argument("--render", action="store_true", help="Render with MuJoCo viewer if available.")
     parser.add_argument("--record-rollout", default=None, help="Optional .npz output path for rollout data.")
     parser.add_argument("--device", default="cpu", help="Torch device for policy inference.")
     parser.add_argument("--zero-action", action="store_true", help="Run without a policy using zero actions.")
+    parser.add_argument("--replay", default=None, help="Optional Isaac golden .npz to replay without running policy.")
+    parser.add_argument(
+        "--replay-field",
+        choices=["action", "target_joint_pos"],
+        default="target_joint_pos",
+        help="Replay raw policy actions through the bridge or replay processed target joint positions.",
+    )
     return parser.parse_args()
-
-
-def load_torchscript_policy(policy_path: str | None, device: str):
-    """Load a TorchScript policy, or return None for zero-action mode."""
-
-    if policy_path is None:
-        return None
-    path = Path(policy_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Policy file does not exist: {path}")
-    if path.suffix == ".onnx":
-        raise NotImplementedError("ONNX policy rollout is not implemented yet. Use policy.pt or --zero-action.")
-    try:
-        import torch
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError("Torch is required to load policy.pt. Use --zero-action to run without torch.") from exc
-    policy = torch.jit.load(str(path), map_location=device)
-    policy.eval()
-    return policy
 
 
 def infer_action(policy, obs: np.ndarray, device: str) -> np.ndarray:
@@ -64,6 +60,34 @@ def infer_action(policy, obs: np.ndarray, device: str) -> np.ndarray:
         obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
         action = policy(obs_tensor)
     return action.squeeze(0).detach().cpu().numpy().astype(np.float64)
+
+
+def load_replay(path: str | None, field: str, steps: int) -> dict[str, np.ndarray] | None:
+    """Load replay commands from an Isaac golden file."""
+
+    if path is None:
+        return None
+    replay_path = Path(path)
+    if not replay_path.exists():
+        raise FileNotFoundError(f"Replay file does not exist: {replay_path}")
+    data = np.load(replay_path, allow_pickle=True)
+    if field not in data.files:
+        raise KeyError(f"Replay field {field!r} not found in {replay_path}. Available keys: {data.files}")
+    replay: dict[str, np.ndarray] = {field: np.asarray(data[field], dtype=np.float64)}
+    if replay[field].ndim != 2 or replay[field].shape[1] != cfg.get_action_dim():
+        raise ValueError(f"Replay field {field!r} must have shape (N, {cfg.get_action_dim()}), got {replay[field].shape}")
+    if replay[field].shape[0] < steps:
+        raise ValueError(f"Replay field {field!r} has {replay[field].shape[0]} rows, fewer than --steps {steps}")
+    if "action" in data.files:
+        action = np.asarray(data["action"], dtype=np.float64)
+        if action.ndim == 2 and action.shape[1] == cfg.get_action_dim() and action.shape[0] >= steps:
+            replay["action"] = action
+    if "command" in data.files:
+        command = np.asarray(data["command"], dtype=np.float64)
+        if command.ndim == 2 and command.shape[1] == 3 and command.shape[0] >= steps:
+            replay["command"] = command
+    replay.update(metadata_from_npz(data))
+    return replay
 
 
 def _mujoco_name(mujoco, model, obj_type, obj_id: int) -> str:
@@ -146,12 +170,19 @@ def main() -> int:
     if args.steps <= 0:
         print("ERROR: --steps must be positive.", file=sys.stderr)
         return 2
-    if args.policy is None and not args.zero_action:
-        print("ERROR: provide --policy or use --zero-action.", file=sys.stderr)
+    if args.policy is None and not args.zero_action and args.replay is None:
+        print("ERROR: provide --policy, --replay, or use --zero-action.", file=sys.stderr)
         return 2
 
-    policy = load_torchscript_policy(args.policy, args.device)
+    policy = None
+    policy_path_for_metadata = None
+    if args.policy is not None:
+        policy, _policy_kind = load_policy(require_absolute_path(args.policy, "--policy"), args.device)
+        policy_path_for_metadata = args.policy
     interface = G0MuJoCoInterface(model_path, command=np.asarray(args.command, dtype=np.float64))
+    replay = load_replay(args.replay, args.replay_field, args.steps)
+    if replay is not None and "policy_path" in replay and str(np.asarray(replay["policy_path"]).item()):
+        policy_path_for_metadata = str(np.asarray(replay["policy_path"]).item())
 
     viewer = None
     if args.render:
@@ -187,9 +218,22 @@ def main() -> int:
     }
 
     obs = interface.build_observation()
-    for _ in range(args.steps):
-        action = infer_action(policy, obs, args.device)
-        obs, target_joint_pos = interface.step(action)
+    for step_index in range(args.steps):
+        if replay is not None and "command" in replay:
+            interface.command = replay["command"][step_index].copy()
+        if replay is not None and args.replay_field == "target_joint_pos":
+            target_joint_pos = replay["target_joint_pos"][step_index]
+            if "action" in replay:
+                action = np.clip(replay["action"][step_index], -1.0, 1.0)
+            else:
+                action = np.zeros(cfg.get_action_dim(), dtype=np.float64)
+            obs = interface.step_position_target(target_joint_pos, last_action=action)
+        else:
+            if replay is not None:
+                action = replay["action"][step_index]
+            else:
+                action = infer_action(policy, obs, args.device)
+            obs, target_joint_pos = interface.step(action)
         root_pos, root_quat = interface.get_root_pose()
         rows["time"].append(float(interface.sim_time))
         rows["command"].append(interface.command.copy())
@@ -231,15 +275,21 @@ def main() -> int:
     if args.record_rollout:
         output = Path(args.record_rollout)
         output.parent.mkdir(parents=True, exist_ok=True)
+        metadata = policy_metadata(
+            policy_path_for_metadata,
+            task=args.task,
+            command=interface.command,
+            steps=args.steps,
+        )
+        metadata.pop("command", None)
         np.savez(
             output,
             **{key: np.asarray(value) for key, value in rows.items()},
-            joint_names=np.asarray(cfg.get_joint_names()),
             default_joint_pos=cfg.get_default_joint_pos_array(),
-            action_scale=np.asarray(cfg.ACTION_SCALE),
             sim_dt=np.asarray(interface.model.opt.timestep),
             decimation=np.asarray(cfg.ISAAC_DECIMATION),
             control_dt=np.asarray(cfg.CONTROL_DT),
+            **metadata,
         )
         print(f"Saved MuJoCo rollout: {output}")
 

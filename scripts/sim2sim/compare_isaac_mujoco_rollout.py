@@ -4,12 +4,32 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.sim2sim import g0_sim2sim_config as cfg
+
 
 COMPARE_KEYS = ["joint_pos", "joint_vel", "action", "target_joint_pos", "command"]
+IDENTITY_KEYS = [
+    "policy_path",
+    "policy_filename",
+    "policy_sha256",
+    "checkpoint_run_folder",
+    "task",
+    "command",
+    "steps",
+    "action_dim",
+    "obs_dim",
+    "joint_names",
+    "action_scale",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +63,72 @@ def compare_arrays(a: np.ndarray, b: np.ndarray) -> tuple[str, float | None, flo
     return note, float(np.nanmean(err)), float(np.nanmax(err))
 
 
+def compare_observation_terms(isaac_obs: np.ndarray, mujoco_obs: np.ndarray) -> list[str]:
+    """Build Markdown rows for per-observation-term history comparisons."""
+
+    min_len = min(isaac_obs.shape[0], mujoco_obs.shape[0])
+    rows: list[str] = []
+    for term in cfg.POLICY_OBS_TERMS:
+        isaac_term = np.asarray([cfg.split_policy_observation(obs)[term] for obs in isaac_obs[:min_len]])
+        mujoco_term = np.asarray([cfg.split_policy_observation(obs)[term] for obs in mujoco_obs[:min_len]])
+        err = np.abs(isaac_term - mujoco_term)
+        rows.append(
+            f"| `{term}` | `{isaac_term.shape}` | {float(np.nanmean(err)):.6g} | {float(np.nanmax(err)):.6g} |"
+        )
+    return rows
+
+
+def metadata_value(data: np.lib.npyio.NpzFile, key: str) -> str:
+    if key not in data.files:
+        return "missing"
+    value = np.asarray(data[key])
+    if key == "command" and value.ndim > 1 and value.shape[-1] == 3:
+        first = value.reshape(-1, 3)[0]
+        if np.allclose(value.reshape(-1, 3), first[None, :]):
+            return str(first.tolist())
+        return f"{value.shape}, first={first.tolist()}"
+    if value.ndim == 0:
+        return str(value.item())
+    return str(value.tolist())
+
+
+def policy_identity_rows(isaac: np.lib.npyio.NpzFile, mujoco: np.lib.npyio.NpzFile) -> list[str]:
+    rows = [
+        "| key | Isaac | MuJoCo |",
+        "| --- | --- | --- |",
+    ]
+    for key in IDENTITY_KEYS:
+        rows.append(f"| `{key}` | `{metadata_value(isaac, key)}` | `{metadata_value(mujoco, key)}` |")
+    return rows
+
+
+def per_joint_worst_rows(
+    isaac: np.lib.npyio.NpzFile,
+    mujoco: np.lib.npyio.NpzFile,
+    key: str,
+    *,
+    top_k: int = 8,
+) -> list[str]:
+    """Return worst per-joint diff rows for a rollout key."""
+
+    if key not in isaac.files or key not in mujoco.files:
+        return [f"| `{key}` | missing in one file | n/a | n/a |"]
+    a = np.asarray(isaac[key], dtype=np.float64)
+    b = np.asarray(mujoco[key], dtype=np.float64)
+    min_len = min(a.shape[0], b.shape[0])
+    if a.ndim != 2 or b.ndim != 2 or a.shape[1] != cfg.get_action_dim() or b.shape[1] != cfg.get_action_dim():
+        return [f"| `{key}` | unsupported shape {a.shape} vs {b.shape} | n/a | n/a |"]
+    err = np.abs(a[:min_len] - b[:min_len])
+    max_by_joint = np.nanmax(err, axis=0)
+    mean_by_joint = np.nanmean(err, axis=0)
+    order = np.argsort(-max_by_joint)[:top_k]
+    names = cfg.get_joint_names()
+    return [
+        f"| `{key}` | `{names[index]}` | {float(mean_by_joint[index]):.6g} | {float(max_by_joint[index]):.6g} |"
+        for index in order
+    ]
+
+
 def main() -> int:
     args = parse_args()
     isaac_path = Path(args.isaac)
@@ -59,6 +145,10 @@ def main() -> int:
         "",
         f"- Isaac file: `{isaac_path}`",
         f"- MuJoCo file: `{mujoco_path}`",
+        "",
+        "## Policy Identity",
+        "",
+        *policy_identity_rows(isaac, mujoco),
         "",
         "| key | status | mean abs error | max abs error |",
         "| --- | --- | ---: | ---: |",
@@ -86,6 +176,30 @@ def main() -> int:
         status, mean_abs, max_abs = compare_arrays(isaac_height, mujoco_height)
         lines.append(f"| `root_height` | {status} | {mean_abs:.6g} | {max_abs:.6g} |")
 
+    lines.extend(["", "## Observation Term Diff", ""])
+    if "obs" in isaac.files and "obs" in mujoco.files:
+        lines.extend(
+            [
+                "| term | compared shape | mean abs error | max abs error |",
+                "| --- | --- | ---: | ---: |",
+                *compare_observation_terms(np.asarray(isaac["obs"]), np.asarray(mujoco["obs"])),
+            ]
+        )
+    else:
+        lines.append("`obs` is missing in one rollout.")
+
+    lines.extend(
+        [
+            "",
+            "## Worst Per-Joint Diffs",
+            "",
+            "| key | joint | mean abs error | max abs error |",
+            "| --- | --- | ---: | ---: |",
+        ]
+    )
+    for key in ("action", "target_joint_pos", "joint_pos", "joint_vel"):
+        lines.extend(per_joint_worst_rows(isaac, mujoco, key))
+
     lines.extend(
         [
             "",
@@ -106,4 +220,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
