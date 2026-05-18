@@ -270,11 +270,40 @@ docs/g0_deploy_sim2sim_validation_matrix_report.md
 The current 16-case matrix result is:
 
 ```text
-16/16 runner OK
-16/16 checker OK
-0/16 velocity-limit exceeded
+500-step matrix: 16/16 runner OK
+500-step matrix: 16/16 checker OK
+velocity-limit exceeded: 0/16 cases
 zero-action cases: early-fall heuristic true
-policy cases: early-fall heuristic false
+some policy cases: early-fall heuristic true at 500 steps
+current status: started, not smoke pass, not credible pass
+```
+
+Run controlled root-frame diagnostics:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/diagnose_root_frame_conventions.py
+
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/sim2sim/dump_isaac_controlled_root_state.py \
+  --task G0-Velocity-v0 \
+  --output logs/sim2sim/root_frame/isaac_controlled_root_state.npz \
+  --headless
+
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/dump_mujoco_controlled_root_state.py \
+  --model mujoco/g0.xml \
+  --output logs/sim2sim/root_frame/mujoco_controlled_root_state.npz
+
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/compare_controlled_root_frame.py \
+  --isaac logs/sim2sim/root_frame/isaac_controlled_root_state.npz \
+  --mujoco logs/sim2sim/root_frame/mujoco_controlled_root_state.npz \
+  --output logs/sim2sim/root_frame/controlled_root_frame_report.md
+```
+
+Current controlled root-frame result:
+
+```text
+quaternion order: wxyz
+projected_gravity aligned: True
+base_ang_vel aligned: True
 ```
 
 ## Compare Rollouts

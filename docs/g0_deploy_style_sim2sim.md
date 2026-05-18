@@ -173,7 +173,7 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validat
   --output-dir logs/sim2sim/g0_deploy/validation_matrix
 ```
 
-Latest result:
+Latest 500-step result:
 
 ```text
 Validation matrix OK: 16/16 cases OK
@@ -186,15 +186,33 @@ docs/g0_deploy_sim2sim_validation_matrix_report.md
 logs/sim2sim/g0_deploy/validation_matrix/validation_matrix_summary.md
 ```
 
-Main signals:
+Main 500-step signals:
 
 - All 16 rollouts ran and passed checker.
-- All zero-action cases tripped the early-fall heuristic, with root height dropping below `0.12`.
-- All policy cases stayed above the fall threshold for 200 steps.
-- Policy action saturation is present, with the highest case at command `[0.1, 0.0, 0.0]` in position mode.
-- Raw PD torque saturation is present but low; clipped torque always stays inside `effort_limit_sim`.
+- All zero-action cases tripped the early-fall heuristic.
+- Some policy cases also tripped the early-fall heuristic at 500 steps after the corrected `base_ang_vel` convention.
+- Policy action saturation is present; the highest 500-step case is `policy_position_c0_c0_c0`.
+- Raw PD torque saturation is present but remains below the 5% smoke threshold.
 - No case exceeded `velocity_limit_sim`.
-- Position and pd_torque are close for this short matrix, but position mode has higher torque saturation on the `[0.1, 0.0, 0.0]` policy case.
+- Current status is `sim2sim started`, not smoke pass and not credible pass.
+
+Credibility criteria:
+
+```text
+docs/g0_sim2sim_credibility_criteria.md
+```
+
+Root-frame diagnostics:
+
+```text
+docs/root_frame_convention_diagnostics.md
+```
+
+Zero-action collapse analysis:
+
+```text
+docs/zero_action_collapse_analysis.md
+```
 
 ## Position Mode Versus PD Torque Mode
 

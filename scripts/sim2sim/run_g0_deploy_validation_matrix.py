@@ -190,6 +190,22 @@ def write_report(path: Path, records: list[dict[str, Any]], args: argparse.Names
     highest_torque = max(ok_records, key=lambda r: r["metrics"]["torque_saturation_ratio"]) if ok_records else None
     fall_cases = [record for record in ok_records if record["metrics"]["early_fall"]]
     velocity_cases = [record for record in ok_records if record["metrics"]["velocity_exceeded_count"] > 0]
+    policy_records = [record for record in ok_records if record["case"].action_kind == "policy"]
+    zero_records = [record for record in ok_records if record["case"].action_kind == "zero_action"]
+    policy_root_ok = all(record["metrics"]["root_height_min"] >= 0.16 for record in policy_records)
+    policy_torque_ok = all(record["metrics"]["torque_saturation_ratio"] <= 0.05 for record in policy_records)
+    policy_action_ok = all(record["metrics"]["action_saturation_ratio"] <= 0.30 for record in policy_records)
+    policy_velocity_ok = all(record["metrics"]["velocity_exceeded_count"] == 0 for record in policy_records)
+    finite_ok = all(not record["metrics"].get("nan_or_inf", True) for record in ok_records)
+    smoke_pass = (
+        len(policy_records) == 8
+        and int(args.steps) >= 500
+        and policy_root_ok
+        and policy_torque_ok
+        and policy_action_ok
+        and policy_velocity_ok
+        and finite_ok
+    )
 
     lines = [
         "# G0 Deploy Sim2sim Validation Matrix Report",
@@ -240,6 +256,34 @@ def write_report(path: Path, records: list[dict[str, Any]], args: argparse.Names
             f"- highest torque saturation case: `{highest_torque['case'].name if highest_torque else 'n/a'}`",
             f"- early fall cases: `{[record['case'].name for record in fall_cases]}`",
             f"- velocity-limit exceeded cases: `{[record['case'].name for record in velocity_cases]}`",
+            "",
+            "## Credibility Assessment",
+            "",
+            "- sim2sim started: `True`",
+            f"- sim2sim smoke pass by this matrix: `{smoke_pass}`",
+            "- sim2sim credible pass: `False`",
+            "",
+            "Smoke-pass criteria used here:",
+            "",
+            "- policy position and policy pd_torque both run at least 500 steps for all matrix commands",
+            "- policy root height stays at or above `0.16 m`",
+            "- velocity-limit exceeded joints are `0/22`",
+            "- torque saturation ratio stays at or below `5%`",
+            "- action saturation ratio stays at or below `30%`",
+            "- no NaN/Inf is present",
+            "",
+            f"- policy root-height criterion: `{policy_root_ok}`",
+            f"- policy torque saturation criterion: `{policy_torque_ok}`",
+            f"- policy action saturation criterion: `{policy_action_ok}`",
+            f"- policy velocity-limit criterion: `{policy_velocity_ok}`",
+            f"- finite-data criterion: `{finite_ok}`",
+            f"- zero-action early-fall cases: `{[record['case'].name for record in zero_records if record['metrics']['early_fall']]}`",
+            "",
+            "Current interpretation:",
+            "",
+            "- Passing policy cases support active-control matrix execution, but smoke pass remains false when any policy criterion fails.",
+            "- Zero-action collapse does not by itself imply policy failure; it says the default target pose is not a static MuJoCo equilibrium under the current dynamics/contact model.",
+            "- Credible pass is still false because it requires longer 1000-step runs, explainable position/pd_torque differences, and deeper actuator/contact behavior reports.",
             "",
             "## Position Vs PD Torque",
             "",

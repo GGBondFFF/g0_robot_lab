@@ -263,17 +263,21 @@ class G0MuJoCoInterface:
         )
 
     def get_base_ang_vel(self) -> np.ndarray:
-        """Return MuJoCo freejoint angular velocity for base-frame diagnostics.
+        """Return MuJoCo freejoint angular velocity in the base/body frame.
 
         MuJoCo stores freejoint qvel as translational velocity followed by
-        angular velocity. This is close to the Isaac Lab term needed for policy
-        observations, but the exact frame convention still needs to be checked
-        term-by-term against Isaac `root_ang_vel_b`.
+        angular velocity in world coordinates for this model. Isaac Lab policy
+        observations use ``root_ang_vel_b``, so rotate the angular velocity into
+        the body frame with ``R_world_body.T``.
         """
 
         if self.model.nv < 6:
             return np.zeros(3, dtype=np.float64)
-        return np.asarray(self.data.qvel[3:6], dtype=np.float64)
+        _, quat = self.get_root_pose()
+        ang_vel = np.asarray(self.data.qvel[3:6], dtype=np.float64).copy()
+        if quat is None:
+            return ang_vel
+        return self.quat_wxyz_to_matrix(quat).T @ ang_vel
 
     @staticmethod
     def quat_wxyz_to_matrix(quat: np.ndarray) -> np.ndarray:

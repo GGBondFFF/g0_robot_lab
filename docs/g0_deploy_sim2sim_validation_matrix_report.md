@@ -5,8 +5,8 @@
 - model: `mujoco/g0.xml`
 - deploy_cfg: `logs/sim2sim/g0_deploy/params/deploy.yaml`
 - policy: `logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.pt`
-- steps per case: `200`
-- output_dir: `logs/sim2sim/g0_deploy/validation_matrix`
+- steps per case: `500`
+- output_dir: `logs/sim2sim/g0_deploy/validation_matrix_500`
 
 This report validates the deploy-style MuJoCo runtime. It does not tune policy quality or physics parameters.
 
@@ -14,56 +14,89 @@ This report validates the deploy-style MuJoCo runtime. It does not tune policy q
 
 | case | run | check | action max | action sat | torque max | torque sat | vel exceeded | root h min/final | contacts mean/max | foot force mean/max | early fall |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `zero_action_position_c0_c0_c0` | `True` | `True` | 0 | 0 | 0.5789 | 0.0004545 | 0 | 0.02755/0.04007 | 4.185/9 | 3.688/13.65 | `True` |
-| `zero_action_position_c0p05_c0_c0` | `True` | `True` | 0 | 0 | 0.5789 | 0.0004545 | 0 | 0.02755/0.04007 | 4.185/9 | 3.688/13.65 | `True` |
-| `zero_action_position_c0p1_c0_c0` | `True` | `True` | 0 | 0 | 0.5789 | 0.0004545 | 0 | 0.02755/0.04007 | 4.185/9 | 3.688/13.65 | `True` |
-| `zero_action_position_c0_c0_c0p1` | `True` | `True` | 0 | 0 | 0.5789 | 0.0004545 | 0 | 0.02755/0.04007 | 4.185/9 | 3.688/13.65 | `True` |
-| `zero_action_pd_torque_c0_c0_c0` | `True` | `True` | 0 | 0 | 0.7618 | 0.0004545 | 0 | 0.03015/0.04007 | 4.08/7 | 4.106/13.56 | `True` |
-| `zero_action_pd_torque_c0p05_c0_c0` | `True` | `True` | 0 | 0 | 0.7618 | 0.0004545 | 0 | 0.03015/0.04007 | 4.08/7 | 4.106/13.56 | `True` |
-| `zero_action_pd_torque_c0p1_c0_c0` | `True` | `True` | 0 | 0 | 0.7618 | 0.0004545 | 0 | 0.03015/0.04007 | 4.08/7 | 4.106/13.56 | `True` |
-| `zero_action_pd_torque_c0_c0_c0p1` | `True` | `True` | 0 | 0 | 0.7618 | 0.0004545 | 0 | 0.03015/0.04007 | 4.08/7 | 4.106/13.56 | `True` |
-| `policy_position_c0_c0_c0` | `True` | `True` | 2.149 | 0.1368 | 0.6803 | 0.001136 | 0 | 0.2294/0.2318 | 2.795/5 | 15.69/19.43 | `False` |
-| `policy_position_c0p05_c0_c0` | `True` | `True` | 2.12 | 0.1445 | 0.5927 | 0.0004545 | 0 | 0.2289/0.2309 | 2.78/6 | 15.54/19.92 | `False` |
-| `policy_position_c0p1_c0_c0` | `True` | `True` | 2.091 | 0.1705 | 0.9588 | 0.0125 | 0 | 0.2289/0.23 | 2.78/5 | 15.15/21.1 | `False` |
-| `policy_position_c0_c0_c0p1` | `True` | `True` | 2.124 | 0.1373 | 0.6662 | 0.001136 | 0 | 0.2294/0.2312 | 2.78/4 | 15.7/21.3 | `False` |
-| `policy_pd_torque_c0_c0_c0` | `True` | `True` | 2.086 | 0.1345 | 0.54 | 0.0002273 | 0 | 0.2299/0.2314 | 2.85/5 | 15.94/19.78 | `False` |
-| `policy_pd_torque_c0p05_c0_c0` | `True` | `True` | 2.073 | 0.1473 | 0.54 | 0.0002273 | 0 | 0.2297/0.2313 | 2.955/5 | 15.84/19.3 | `False` |
-| `policy_pd_torque_c0p1_c0_c0` | `True` | `True` | 2.065 | 0.1568 | 0.54 | 0.0004545 | 0 | 0.2295/0.231 | 3.04/5 | 15.8/19.66 | `False` |
-| `policy_pd_torque_c0_c0_c0p1` | `True` | `True` | 2.083 | 0.138 | 0.54 | 0.0002273 | 0 | 0.2299/0.2314 | 2.735/5 | 15.82/19.49 | `False` |
+| `zero_action_position_c0_c0_c0` | `True` | `True` | 0 | 0 | 0.5789 | 0.0001818 | 0 | 0.02755/0.04007 | 4.674/9 | 1.633/13.65 | `True` |
+| `zero_action_position_c0p05_c0_c0` | `True` | `True` | 0 | 0 | 0.5789 | 0.0001818 | 0 | 0.02755/0.04007 | 4.674/9 | 1.633/13.65 | `True` |
+| `zero_action_position_c0p1_c0_c0` | `True` | `True` | 0 | 0 | 0.5789 | 0.0001818 | 0 | 0.02755/0.04007 | 4.674/9 | 1.633/13.65 | `True` |
+| `zero_action_position_c0_c0_c0p1` | `True` | `True` | 0 | 0 | 0.5789 | 0.0001818 | 0 | 0.02755/0.04007 | 4.674/9 | 1.633/13.65 | `True` |
+| `zero_action_pd_torque_c0_c0_c0` | `True` | `True` | 0 | 0 | 0.7618 | 0.0001818 | 0 | 0.03015/0.04007 | 4.632/7 | 1.801/13.56 | `True` |
+| `zero_action_pd_torque_c0p05_c0_c0` | `True` | `True` | 0 | 0 | 0.7618 | 0.0001818 | 0 | 0.03015/0.04007 | 4.632/7 | 1.801/13.56 | `True` |
+| `zero_action_pd_torque_c0p1_c0_c0` | `True` | `True` | 0 | 0 | 0.7618 | 0.0001818 | 0 | 0.03015/0.04007 | 4.632/7 | 1.801/13.56 | `True` |
+| `zero_action_pd_torque_c0_c0_c0p1` | `True` | `True` | 0 | 0 | 0.7618 | 0.0001818 | 0 | 0.03015/0.04007 | 4.632/7 | 1.801/13.56 | `True` |
+| `policy_position_c0_c0_c0` | `True` | `True` | 17.64 | 0.4053 | 1.201 | 0.01291 | 0 | 0.02918/0.03409 | 2.306/7 | 10.19/21.41 | `True` |
+| `policy_position_c0p05_c0_c0` | `True` | `True` | 23.39 | 0.373 | 1.421 | 0.01655 | 0 | 0.0327/0.03666 | 2.302/5 | 11.13/19.46 | `True` |
+| `policy_position_c0p1_c0_c0` | `True` | `True` | 3.512 | 0.1735 | 1.874 | 0.01091 | 0 | 0.2165/0.2165 | 2.75/6 | 15.16/22.09 | `False` |
+| `policy_position_c0_c0_c0p1` | `True` | `True` | 2.147 | 0.1386 | 0.6735 | 0.001455 | 0 | 0.2292/0.2298 | 2.786/5 | 15.69/19.75 | `False` |
+| `policy_pd_torque_c0_c0_c0` | `True` | `True` | 16.63 | 0.2718 | 1.283 | 0.008182 | 0 | 0.03247/0.03628 | 2.514/8 | 13.23/20.89 | `True` |
+| `policy_pd_torque_c0p05_c0_c0` | `True` | `True` | 9.039 | 0.2113 | 1.439 | 0.006636 | 0 | 0.03638/0.0364 | 2.888/7 | 13.96/20.68 | `True` |
+| `policy_pd_torque_c0p1_c0_c0` | `True` | `True` | 2.127 | 0.1546 | 0.54 | 9.091e-05 | 0 | 0.2292/0.2292 | 3.088/5 | 15.76/19.8 | `False` |
+| `policy_pd_torque_c0_c0_c0p1` | `True` | `True` | 20.5 | 0.2759 | 0.9196 | 0.007091 | 0 | 0.03102/0.03469 | 2.522/6 | 12.98/20.12 | `True` |
 
 ## Summary
 
 - cases run: `16`
 - cases with runner success: `16/16`
 - cases with checker success: `16/16`
-- most stable case by root height / velocity / torque / contact score: `policy_pd_torque_c0_c0_c0`
+- most stable case by root height / velocity / torque / contact score: `policy_position_c0_c0_c0p1`
 - least stable case by root height / velocity / torque / contact score: `zero_action_position_c0_c0_c0`
-- highest action saturation case: `policy_position_c0p1_c0_c0`
-- highest torque saturation case: `policy_position_c0p1_c0_c0`
-- early fall cases: `['zero_action_position_c0_c0_c0', 'zero_action_position_c0p05_c0_c0', 'zero_action_position_c0p1_c0_c0', 'zero_action_position_c0_c0_c0p1', 'zero_action_pd_torque_c0_c0_c0', 'zero_action_pd_torque_c0p05_c0_c0', 'zero_action_pd_torque_c0p1_c0_c0', 'zero_action_pd_torque_c0_c0_c0p1']`
+- highest action saturation case: `policy_position_c0_c0_c0`
+- highest torque saturation case: `policy_position_c0p05_c0_c0`
+- early fall cases: `['zero_action_position_c0_c0_c0', 'zero_action_position_c0p05_c0_c0', 'zero_action_position_c0p1_c0_c0', 'zero_action_position_c0_c0_c0p1', 'zero_action_pd_torque_c0_c0_c0', 'zero_action_pd_torque_c0p05_c0_c0', 'zero_action_pd_torque_c0p1_c0_c0', 'zero_action_pd_torque_c0_c0_c0p1', 'policy_position_c0_c0_c0', 'policy_position_c0p05_c0_c0', 'policy_pd_torque_c0_c0_c0', 'policy_pd_torque_c0p05_c0_c0', 'policy_pd_torque_c0_c0_c0p1']`
 - velocity-limit exceeded cases: `[]`
+
+## Credibility Assessment
+
+- sim2sim started: `True`
+- sim2sim smoke pass by this matrix: `False`
+- sim2sim credible pass: `False`
+
+Smoke-pass criteria used here:
+
+- policy position and policy pd_torque both run at least 500 steps for all matrix commands
+- policy root height stays at or above `0.16 m`
+- velocity-limit exceeded joints are `0/22`
+- torque saturation ratio stays at or below `5%`
+- action saturation ratio stays at or below `30%`
+- no NaN/Inf is present
+
+- policy root-height criterion: `False`
+- policy torque saturation criterion: `True`
+- policy action saturation criterion: `False`
+- policy velocity-limit criterion: `True`
+- finite-data criterion: `True`
+- zero-action early-fall cases: `['zero_action_position_c0_c0_c0', 'zero_action_position_c0p05_c0_c0', 'zero_action_position_c0p1_c0_c0', 'zero_action_position_c0_c0_c0p1', 'zero_action_pd_torque_c0_c0_c0', 'zero_action_pd_torque_c0p05_c0_c0', 'zero_action_pd_torque_c0p1_c0_c0', 'zero_action_pd_torque_c0_c0_c0p1']`
+- controlled root-frame diagnostics: `pass`
+- projected_gravity formula corrected this round: `False`
+- base_ang_vel formula corrected this round: `True`
+
+Current interpretation:
+
+- Passing policy cases support active-control matrix execution, but smoke pass remains false because some policy cases fail the root-height/action-saturation criteria.
+- Zero-action collapse does not by itself imply policy failure; it says the default target pose is not a static MuJoCo equilibrium under the current dynamics/contact model.
+- Credible pass is still false because it requires longer 1000-step runs, explainable position/pd_torque differences, and deeper actuator/contact behavior reports.
+- Cases supporting smoke direction: `policy_position_c0p1_c0_c0`, `policy_position_c0_c0_c0p1`, `policy_pd_torque_c0p1_c0_c0`.
+- Cases blocking smoke pass: `policy_position_c0_c0_c0`, `policy_position_c0p05_c0_c0`, `policy_pd_torque_c0_c0_c0`, `policy_pd_torque_c0p05_c0_c0`, `policy_pd_torque_c0_c0_c0p1`.
 
 ## Position Vs PD Torque
 
-- `zero_action` command `[0.0, 0.0, 0.0]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0004545` / `0.0004545`, foot_force_max `13.65` / `13.56`
-- `zero_action` command `[0.05, 0.0, 0.0]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0004545` / `0.0004545`, foot_force_max `13.65` / `13.56`
-- `zero_action` command `[0.1, 0.0, 0.0]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0004545` / `0.0004545`, foot_force_max `13.65` / `13.56`
-- `zero_action` command `[0.0, 0.0, 0.1]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0004545` / `0.0004545`, foot_force_max `13.65` / `13.56`
-- `policy` command `[0.0, 0.0, 0.0]`: root_min position/pd_torque `0.2294` / `0.2299`, torque_sat `0.001136` / `0.0002273`, foot_force_max `19.43` / `19.78`
-- `policy` command `[0.05, 0.0, 0.0]`: root_min position/pd_torque `0.2289` / `0.2297`, torque_sat `0.0004545` / `0.0002273`, foot_force_max `19.92` / `19.3`
-- `policy` command `[0.1, 0.0, 0.0]`: root_min position/pd_torque `0.2289` / `0.2295`, torque_sat `0.0125` / `0.0004545`, foot_force_max `21.1` / `19.66`
-- `policy` command `[0.0, 0.0, 0.1]`: root_min position/pd_torque `0.2294` / `0.2299`, torque_sat `0.001136` / `0.0002273`, foot_force_max `21.3` / `19.49`
+- `zero_action` command `[0.0, 0.0, 0.0]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0001818` / `0.0001818`, foot_force_max `13.65` / `13.56`
+- `zero_action` command `[0.05, 0.0, 0.0]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0001818` / `0.0001818`, foot_force_max `13.65` / `13.56`
+- `zero_action` command `[0.1, 0.0, 0.0]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0001818` / `0.0001818`, foot_force_max `13.65` / `13.56`
+- `zero_action` command `[0.0, 0.0, 0.1]`: root_min position/pd_torque `0.02755` / `0.03015`, torque_sat `0.0001818` / `0.0001818`, foot_force_max `13.65` / `13.56`
+- `policy` command `[0.0, 0.0, 0.0]`: root_min position/pd_torque `0.02918` / `0.03247`, torque_sat `0.01291` / `0.008182`, foot_force_max `21.41` / `20.89`
+- `policy` command `[0.05, 0.0, 0.0]`: root_min position/pd_torque `0.0327` / `0.03638`, torque_sat `0.01655` / `0.006636`, foot_force_max `19.46` / `20.68`
+- `policy` command `[0.1, 0.0, 0.0]`: root_min position/pd_torque `0.2165` / `0.2292`, torque_sat `0.01091` / `9.091e-05`, foot_force_max `22.09` / `19.8`
+- `policy` command `[0.0, 0.0, 0.1]`: root_min position/pd_torque `0.2292` / `0.03102`, torque_sat `0.001455` / `0.007091`, foot_force_max `19.75` / `20.12`
 
 ## Zero-Action Vs Policy
 
-- `position` command `[0.0, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1368`, root_min `0.02755` / `0.2294`, torque_sat `0.0004545` / `0.001136`
-- `position` command `[0.05, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1445`, root_min `0.02755` / `0.2289`, torque_sat `0.0004545` / `0.0004545`
-- `position` command `[0.1, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1705`, root_min `0.02755` / `0.2289`, torque_sat `0.0004545` / `0.0125`
-- `position` command `[0.0, 0.0, 0.1]`: action_sat zero/policy `0` / `0.1373`, root_min `0.02755` / `0.2294`, torque_sat `0.0004545` / `0.001136`
-- `pd_torque` command `[0.0, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1345`, root_min `0.03015` / `0.2299`, torque_sat `0.0004545` / `0.0002273`
-- `pd_torque` command `[0.05, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1473`, root_min `0.03015` / `0.2297`, torque_sat `0.0004545` / `0.0002273`
-- `pd_torque` command `[0.1, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1568`, root_min `0.03015` / `0.2295`, torque_sat `0.0004545` / `0.0004545`
-- `pd_torque` command `[0.0, 0.0, 0.1]`: action_sat zero/policy `0` / `0.138`, root_min `0.03015` / `0.2299`, torque_sat `0.0004545` / `0.0002273`
+- `position` command `[0.0, 0.0, 0.0]`: action_sat zero/policy `0` / `0.4053`, root_min `0.02755` / `0.02918`, torque_sat `0.0001818` / `0.01291`
+- `position` command `[0.05, 0.0, 0.0]`: action_sat zero/policy `0` / `0.373`, root_min `0.02755` / `0.0327`, torque_sat `0.0001818` / `0.01655`
+- `position` command `[0.1, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1735`, root_min `0.02755` / `0.2165`, torque_sat `0.0001818` / `0.01091`
+- `position` command `[0.0, 0.0, 0.1]`: action_sat zero/policy `0` / `0.1386`, root_min `0.02755` / `0.2292`, torque_sat `0.0001818` / `0.001455`
+- `pd_torque` command `[0.0, 0.0, 0.0]`: action_sat zero/policy `0` / `0.2718`, root_min `0.03015` / `0.03247`, torque_sat `0.0001818` / `0.008182`
+- `pd_torque` command `[0.05, 0.0, 0.0]`: action_sat zero/policy `0` / `0.2113`, root_min `0.03015` / `0.03638`, torque_sat `0.0001818` / `0.006636`
+- `pd_torque` command `[0.1, 0.0, 0.0]`: action_sat zero/policy `0` / `0.1546`, root_min `0.03015` / `0.2292`, torque_sat `0.0001818` / `9.091e-05`
+- `pd_torque` command `[0.0, 0.0, 0.1]`: action_sat zero/policy `0` / `0.2759`, root_min `0.03015` / `0.03102`, torque_sat `0.0001818` / `0.007091`
 
 ## Likely Failure Causes Ranked
 

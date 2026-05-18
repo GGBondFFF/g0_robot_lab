@@ -355,7 +355,7 @@ TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/run_g0_deploy_validat
 Result:
 
 ```text
-Validation matrix OK: 16/16 cases OK
+500-step validation matrix OK: 16/16 cases OK
 ```
 
 Coverage:
@@ -370,21 +370,38 @@ commands:
   [0.0, 0.0, 0.1]
 ```
 
-Summary:
+500-step summary:
 
 - All 16 rollouts completed and passed `check_g0_deploy_rollout.py`.
 - Checker now reports action saturation, torque saturation, velocity-limit exceedance, root height min/max/final, finite root/quaternion/gravity diagnostics, contact count, foot force ranges, and early-fall heuristic.
 - Zero-action cases all fell below the `root_height < 0.12` heuristic. This is a default-pose/contact/dynamics signal, not a policy failure.
-- Policy cases stayed above the fall threshold for 200 steps.
-- Policy action saturation is present. The highest matrix value was `0.1705` in `policy_position_c0p1_c0_c0`.
-- Raw PD torque saturation is present but low. The highest matrix value was `0.0125` in `policy_position_c0p1_c0_c0`.
+- Several policy cases also fell below the `root_height < 0.12` heuristic at 500 steps after the corrected `base_ang_vel` convention.
+- Policy action saturation is present. The highest 500-step matrix value was `0.4053` in `policy_position_c0_c0_c0`.
+- Raw PD torque saturation is present but below the 5% smoke threshold. The highest 500-step matrix value was `0.01655` in `policy_position_c0p05_c0_c0`.
 - No case exceeded `velocity_limit_sim`.
-- Foot contact force maxima ranged from about `13.6` in zero-action cases to about `21.3` in policy cases.
+- Foot contact force maxima ranged from about `13.6` in zero-action cases to about `22.1` in policy cases.
+- Current status: `sim2sim started`.
+- Current status: not smoke pass, because policy root-height and action-saturation criteria are not met.
+- Current status: not credible pass, because 1000-step stability and deeper actuator/contact explanations are still missing.
+
+Controlled root-frame diagnostics:
+
+```text
+quaternion order: wxyz
+projected_gravity max abs error: 2.32911e-08
+base_ang_vel max abs error: 5.5907e-08
+root_height max abs error: 4.17233e-09
+```
+
+The controlled diagnostics found and fixed a MuJoCo-side `base_ang_vel` frame mismatch. `projected_gravity` did not require a formula change.
 
 Primary report:
 
 ```text
 docs/g0_deploy_sim2sim_validation_matrix_report.md
+docs/root_frame_convention_diagnostics.md
+docs/g0_sim2sim_credibility_criteria.md
+docs/zero_action_collapse_analysis.md
 ```
 
 Generated artifacts:
