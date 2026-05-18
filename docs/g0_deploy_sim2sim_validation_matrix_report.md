@@ -106,6 +106,26 @@ Current interpretation:
 4. No joint exceeded `velocity_limit_sim` in this matrix.
 5. Contact-force variation remains a physics fidelity signal; inspect contact/friction/solver only with controlled comparisons, not policy tuning.
 
+## Failure-Window Analysis
+
+Follow-up policy-only window analysis was run on the 500-step matrix:
+
+```text
+logs/sim2sim/g0_deploy/failure_window_analysis.md
+docs/g0_policy_failure_window_analysis.md
+```
+
+Summary:
+
+- Failed policy cases: `policy_pd_torque_c0_c0_c0`, `policy_pd_torque_c0_c0_c0p1`, `policy_pd_torque_c0p05_c0_c0`, `policy_position_c0_c0_c0`, `policy_position_c0p05_c0_c0`.
+- Stable policy cases: `policy_pd_torque_c0p1_c0_c0`, `policy_position_c0_c0_c0p1`, `policy_position_c0p1_c0_c0`.
+- Failure steps: `421`, `414`, `449`, `324`, `355` respectively.
+- The most common pre-failure signal is `action saturation first`.
+- Contact loss appears after root-height failure in the failed cases, so it is not the earliest detected precursor.
+- Torque saturation is low and not the primary signal.
+- Velocity limits remain non-suspect in this matrix.
+- Aggregate suspicious joints: `r_knee_pitch_joint`, `l_hip_pitch_joint`, `r_hip_pitch_joint`, `l_ankle_pitch_joint`, `l_knee_pitch_joint`, `r_ankle_roll_joint`.
+
 ## Next Steps
 
 - If action or torque saturation grows, inspect policy/action scale/exported actuator limits before touching gains.

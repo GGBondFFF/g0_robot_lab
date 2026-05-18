@@ -306,6 +306,33 @@ projected_gravity aligned: True
 base_ang_vel aligned: True
 ```
 
+Analyze 500-step policy failure windows:
+
+```bash
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/analyze_g0_deploy_failure_windows.py \
+  --matrix-dir logs/sim2sim/g0_deploy/validation_matrix_500 \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --output logs/sim2sim/g0_deploy/failure_window_analysis.md
+```
+
+Outputs:
+
+```text
+logs/sim2sim/g0_deploy/failure_window_analysis.md
+docs/g0_policy_failure_window_analysis.md
+```
+
+Current result:
+
+```text
+policy cases analyzed: 8
+failed: 5
+stable: 3
+most common precursor: action saturation first
+velocity limit: not a primary suspect
+torque saturation: not a primary suspect
+```
+
 ## Compare Rollouts
 
 ```bash

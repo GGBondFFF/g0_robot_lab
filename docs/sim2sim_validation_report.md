@@ -404,6 +404,50 @@ docs/g0_sim2sim_credibility_criteria.md
 docs/zero_action_collapse_analysis.md
 ```
 
+Policy failure-window analysis:
+
+```text
+TERM=xterm conda run -n g0_isaaclab python scripts/sim2sim/analyze_g0_deploy_failure_windows.py \
+  --matrix-dir logs/sim2sim/g0_deploy/validation_matrix_500 \
+  --deploy-cfg logs/sim2sim/g0_deploy/params/deploy.yaml \
+  --output logs/sim2sim/g0_deploy/failure_window_analysis.md
+```
+
+Result:
+
+```text
+Analyzed 8 policy cases
+failed: 5
+stable: 3
+most common pre-failure signal: action saturation first
+```
+
+Failed policy cases:
+
+```text
+policy_position_c0_c0_c0: failure step 324
+policy_position_c0p05_c0_c0: failure step 355
+policy_pd_torque_c0_c0_c0: failure step 421
+policy_pd_torque_c0_c0_c0p1: failure step 414
+policy_pd_torque_c0p05_c0_c0: failure step 449
+```
+
+Stable policy cases:
+
+```text
+policy_position_c0p1_c0_c0
+policy_position_c0_c0_c0p1
+policy_pd_torque_c0p1_c0_c0
+```
+
+Interpretation:
+
+- Action saturation is the leading current suspect.
+- Torque saturation is not the main suspect.
+- Velocity limits are not the main suspect.
+- Contact loss is not the earliest precursor in failed policy cases.
+- Suspicious joints are concentrated around `r_knee_pitch_joint`, `l_hip_pitch_joint`, `r_hip_pitch_joint`, `l_ankle_pitch_joint`, and `l_knee_pitch_joint`.
+
 Generated artifacts:
 
 ```text
