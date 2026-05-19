@@ -2,6 +2,8 @@
 
 This document records the current sim2sim plan only. It does not add a MuJoCo code framework on `main`.
 
+Current validation tests treat sim2sim references as interface snapshots only. This branch must not restore `mujoco/` or `scripts/sim2sim/`.
+
 ## Current Main-Branch Scope
 
 The current `main` branch keeps the Isaac Lab `G0-Velocity-v0` baseline runnable.
@@ -31,6 +33,12 @@ Possible responsibilities:
 
 This document is only a planning note for that future branch.
 
+The deployment dry-run tier includes snapshot checks that these implementation directories remain absent while the documentation still records the interface anchors needed for future sim2sim work:
+
+```bash
+python -m pytest tests/deployment -m "deployment_dryrun and hardware_forbidden"
+```
+
 ## Policy Export
 
 The current Isaac Lab `play.py` path can export:
@@ -41,6 +49,15 @@ policy.onnx
 ```
 
 Future sim2sim work should reuse those exported policies instead of inventing a separate export path first.
+
+The raw RSL-RL checkpoint such as `model_9999.pt` is not the deployment inference artifact. The deployment artifacts are:
+
+```text
+exported/policy.pt
+exported/policy.onnx
+```
+
+The release-gate policy artifact contract checks the exported policy IO shape `385 -> 22`; ONNX validation requires `onnxruntime` installed in `g0_isaaclab`.
 
 ## Critical Alignment Items
 

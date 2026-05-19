@@ -89,6 +89,16 @@ The current right-angle ankle assumption is `ankle_pitch`. If the real hardware 
 
 `g0.py` assigns Isaac Lab implicit actuator groups and PD gains. PD gains are controller tuning parameters, while `effort_limit_sim` and `velocity_limit_sim` should continue to reflect the current hardware parameter model.
 
+## Test Coverage
+
+The static unit validation tier covers the actuator constants and ratio contracts:
+
+```bash
+python -m pytest tests/unit -m "unit"
+```
+
+These tests check the standard servo speed conversion, right-angle speed and torque ratios, derived torque and velocity limits, and reflected damping/friction/armature placeholders. They do not launch Isaac Sim and do not contact hardware.
+
 ## Debug-Only Effort Scale
 
 Some debug scripts support an `--effort-scale` argument. That scale is only for diagnosis.
@@ -100,3 +110,5 @@ Do not treat debug-only effort scale as a real hardware parameter. In particular
 - do not use higher effort limits as proof that the hardware can produce those torques
 
 The current zero-action debug result suggests that even when temporary effort scaling reduces saturation, the robot can still fail from geometry, contact, COM, height, or inertia issues.
+
+The 500-step zero-action standing check is an explicit release gate. It may report a physical-readiness failure on the current baseline, and that result should be treated as deployment readiness feedback rather than a default unit, deployment dry-run, or Isaac smoke failure.

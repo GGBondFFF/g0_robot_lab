@@ -71,6 +71,26 @@ The action dimension is the number of G0 SDK joints:
 22
 ```
 
+## Deployment Policy IO Contract
+
+The raw RSL-RL training checkpoint, for example `model_9999.pt`, is not the final deployment inference artifact. It is used for checkpoint identity and load sanity checks.
+
+Deployment inference artifacts are exported by `scripts/rsl_rl/play.py` into the run directory's `exported/` folder:
+
+```text
+exported/policy.pt
+exported/policy.onnx
+```
+
+The exported policy IO contract is:
+
+```text
+observation dim = 385
+action dim = 22
+```
+
+This comes from 77 policy observation values per frame and `history_length = 5`. The exported `policy.pt` and `policy.onnx` release-gate tests validate `385 -> 22` when the artifacts exist. ONNX validation requires `onnxruntime` installed in `g0_isaaclab`.
+
 ## Joint Order
 
 Policy actions are ordered by:

@@ -20,6 +20,15 @@ Isaac Lab launcher:
 /home/lz/IsaacLab/isaaclab.sh -p
 ```
 
+All simulation-related commands must run inside the `g0_isaaclab` conda environment. This includes Isaac Lab, `AppLauncher`, `SimulationApp`, `gym.make` for `G0-Velocity-v0`, `pytest tests/isaaclab`, and commands that import `isaaclab`, `pxr`, `omni`, or runtime task registration.
+
+Use this shell setup before Isaac Lab or simulation commands:
+
+```bash
+source ~/miniconda3/etc/profile.d/conda.sh 2>/dev/null || source ~/anaconda3/etc/profile.d/conda.sh 2>/dev/null || true
+conda activate g0_isaaclab
+```
+
 ## Install Editable Package
 
 ```bash
@@ -115,6 +124,38 @@ Headless play with video:
 
 `play.py` is also the current export path for `policy.pt` and `policy.onnx`.
 
+## Validation Commands
+
+Default static unit tier:
+
+```bash
+python -m pytest tests/unit -m "unit"
+```
+
+Deployment dry-run tier:
+
+```bash
+python -m pytest tests/deployment -m "deployment_dryrun and hardware_forbidden"
+```
+
+Isaac Lab headless smoke tier:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests/isaaclab -m "isaaclab"
+```
+
+Release-gate tier:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
+```
+
+The Isaac Lab smoke tier is selected by `pytest.mark.isaaclab` and uses a combined runtime smoke test to avoid repeated `gym.make`/`env.close` cycles in one `SimulationApp` session. It does not include release-gate tests.
+
+Release gates are explicit deployment-readiness checks. The policy export release gate passed in the current implementation. The zero-action 500-step release gate is explicitly selectable with `-m "release_gate"` and may report a physical-readiness failure; that result is a deployment readiness signal, not a default smoke failure.
+
+The deployment dry-run tier uses fake LowCmd objects and fake transports only. Hardware transport blocking is marker-scoped, so unit and Isaac Lab tests are not affected by a global socket monkeypatch.
+
 ## Zero-Action And Debug Commands
 
 These commands are documented for debugging only. They are not a request to change the scripts in this documentation pass.
@@ -162,3 +203,5 @@ TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/deb
 - Do not run large training jobs from `main` while zero-action standing is still being debugged.
 - Do not mix in `humanoid_lab_v0` commands or checkpoints.
 - Do not create `scripts/sim2sim/` or `mujoco/` on `main`; keep sim2sim implementation for a later branch.
+- Do not send real LowCmd or motor commands from tests.
+- Real hardware command paths require a separately approved bring-up procedure.

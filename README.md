@@ -74,6 +74,15 @@ cd /home/lz/g0_robot_lab/g0_robot_lab
 
 ## Common Commands
 
+All simulation-related commands must run inside the `g0_isaaclab` conda environment. This includes Isaac Lab, `AppLauncher`, `SimulationApp`, `gym.make` for `G0-Velocity-v0`, `pytest tests/isaaclab`, and any command that imports `isaaclab`, `pxr`, `omni`, or runtime task registration.
+
+Activate the environment first:
+
+```bash
+source ~/miniconda3/etc/profile.d/conda.sh 2>/dev/null || source ~/anaconda3/etc/profile.d/conda.sh 2>/dev/null || true
+conda activate g0_isaaclab
+```
+
 List or check the registered G0 task:
 
 ```bash
@@ -121,6 +130,34 @@ Play a checkpoint:
 
 More command details are in [docs/run_commands.md](docs/run_commands.md).
 
+## Validation Tiers
+
+Run the fast static unit tier without Isaac Sim:
+
+```bash
+python -m pytest tests/unit -m "unit"
+```
+
+Run the offline deployment dry-run tier with fake LowCmd and fake transport checks:
+
+```bash
+python -m pytest tests/deployment -m "deployment_dryrun and hardware_forbidden"
+```
+
+Run the Isaac Lab headless smoke tier inside `g0_isaaclab`:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests/isaaclab -m "isaaclab"
+```
+
+Run explicit release gates before deployment work:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
+```
+
+The Isaac Lab smoke tier uses one combined runtime smoke test so it does not create multiple `gym.make`/`env.close` cycles in a single `SimulationApp` session. Release gates are selected separately with `-m "release_gate"` and are not part of the default smoke tier.
+
 ## Current Debug Focus
 
 The current baseline is not considered a final walking policy. Before large-scale training, keep checking:
@@ -139,3 +176,4 @@ See:
 - [docs/g0_actuator_parameters.md](docs/g0_actuator_parameters.md)
 - [docs/zero_action_standing_debug.md](docs/zero_action_standing_debug.md)
 - [docs/sim2sim_isaaclab_to_mujoco.md](docs/sim2sim_isaaclab_to_mujoco.md)
+- [docs/pre_deployment_validation.md](docs/pre_deployment_validation.md)
