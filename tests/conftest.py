@@ -65,9 +65,9 @@ def _apply_marker_scoped_hardware_guard(
         assert os.environ.get("G0_ALLOW_HARDWARE", "0") == "0"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def isaac_sim_app(request: pytest.FixtureRequest):
-    selected = any(item.get_closest_marker("isaaclab") or item.get_closest_marker("release_gate") for item in request.session.items)
+    selected = request.node.get_closest_marker("isaaclab") is not None or request.node.get_closest_marker("release_gate") is not None
     if not selected:
         pytest.skip("Isaac Lab app fixture requested outside isaaclab/release_gate tests.")
 

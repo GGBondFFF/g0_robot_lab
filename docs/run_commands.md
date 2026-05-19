@@ -150,11 +150,58 @@ Release-gate tier:
 /home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
 ```
 
+Policy rollout safety release gate:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q \
+  tests/isaaclab/test_release_gate_policy_rollout_safety.py \
+  -m "release_gate"
+```
+
 The Isaac Lab smoke tier is selected by `pytest.mark.isaaclab` and uses a combined runtime smoke test to avoid repeated `gym.make`/`env.close` cycles in one `SimulationApp` session. It does not include release-gate tests.
 
 Release gates are explicit deployment-readiness checks. The policy export release gate passed in the current implementation. The zero-action 500-step release gate is explicitly selectable with `-m "release_gate"` and may report a physical-readiness failure; that result is a deployment readiness signal, not a default smoke failure.
 
 The deployment dry-run tier uses fake LowCmd objects and fake transports only. Hardware transport blocking is marker-scoped, so unit and Isaac Lab tests are not affected by a global socket monkeypatch.
+
+## Policy Rollout Safety Validation (Isaac Lab only)
+
+This diagnostic runs Isaac Lab policy rollout validation only. It does not send LowCmd or touch real hardware. The separate pytest release gate covers the conservative 500-step hard checks, while raw action clipping, effort, joint margin, and target-delta signals remain diagnostic here.
+
+These commands must be run from the repository root with the `g0_isaaclab` conda environment active, or through the Isaac Lab runtime wrapper.
+
+500 steps:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_policy_rollout_in_isaac.py \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1
+```
+
+1000 steps:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_policy_rollout_in_isaac.py \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 1000 \
+  --num-envs 1
+```
+
+2000 steps:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_policy_rollout_in_isaac.py \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 2000 \
+  --num-envs 1
+```
 
 ## Zero-Action And Debug Commands
 
