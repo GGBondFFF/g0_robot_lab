@@ -51,6 +51,8 @@ The policy export release gate passed in the current implementation. It runs `sc
 
 The zero-action 500-step release gate is explicitly selectable with `-m "release_gate"`. It passed after fixed-condition alignment in PR #1. This does not indicate real-robot deployment readiness.
 
+The policy-rollout-safety 500-step release gate is also now part of the explicit release-gate tier. It runs in Isaac Lab only against the fixed raw RSL-RL checkpoint and checks rollout contract health plus no physical-failure signals for 500 steps. Raw action clipping, effort saturation, joint-limit-margin interpretation, and target-delta jumps remain diagnostic-only in this gate. Passing it still does not indicate real-hardware readiness.
+
 ## Optional Policy Rollout Safety Diagnostic Tier
 
 After the current release gates, there is an additional optional Isaac Lab diagnostic tier:

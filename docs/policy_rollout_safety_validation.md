@@ -123,6 +123,24 @@ Interpretation:
 - The target-delta worst case at step `0` suggests that the initial target jump should be analyzed before it becomes a hard gate.
 - Phase 3 thresholds remain inactive.
 
+## Phase 3 Release Gate
+
+A conservative 500-step pytest release gate has now been added for Isaac Lab policy rollout safety:
+
+- it runs the fixed `G0-Velocity-v0` checkpoint rollout for 500 steps in Isaac Lab only
+- it checks the rollout contract plus no physical-failure signals for this 500-step gate
+- it hard-fails on checkpoint identity problems, environment or policy-load failures, non-finite observations or actions, action shape mismatch, base-height termination, bad-orientation termination, reset count above zero, or clipped-action output outside `[-1, 1]` except for tiny numerical tolerance
+
+The following remain diagnostic-only and are not hard failures in this gate:
+
+- raw policy action outside `[-1, 1]`
+- effort ratio reaching `1.0`
+- effort ratio steps above `0.9`
+- slightly negative joint-limit margin
+- target-delta worst-case values
+
+Passing this release gate still does not mean real-robot deployment readiness, does not authorize LowCmd transmission, and does not permit hardware bring-up.
+
 ## Remaining Risks
 
 The Phase 1 contract passed, but the following risks remain open:
