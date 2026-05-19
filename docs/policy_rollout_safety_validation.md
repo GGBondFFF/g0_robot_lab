@@ -105,6 +105,24 @@ The `time_out` resets observed at 1000 and 2000 steps are not physical failure s
 
 In this diagnostic context, `time_out` means the environment episode horizon was reached and the rollout reset normally. The 1000-step run saw one such reset, and the 2000-step run saw two. These do not indicate a fall, base-height violation, or bad-orientation event.
 
+## Phase 2.5 Worst-Case Diagnostic Findings
+
+Phase 2.5 added worst-case step and joint reporting to the diagnostic output. The 500-, 1000-, and 2000-step runs all stayed `PASS (contract)`, and the worst-case findings were:
+
+- raw policy action minimum: step `5`, `r_ankle_roll_joint`, value `-2.9596`
+- raw policy action maximum: step `892`, `r_knee_pitch_joint`, value `2.4360`
+- effort ratio worst: step `0`, `l_knee_pitch_joint`, value `1.0`
+- joint limit margin worst: step `0`, `r_shoulder_roll_joint`, value `-0.05134`
+- target delta worst: step `0`, `r_elbow_pitch_joint`, value `0.86026`
+
+Interpretation:
+
+- The raw action worst cases confirm that any deployment-facing path must apply clipping before converting policy output into any LowCmd-compatible representation.
+- The effort-ratio worst case appearing at step `0` suggests likely initial transient or reset-alignment behavior. Phase 3 should separate that startup behavior from sustained saturation before enabling any hard gate.
+- The joint-limit-margin worst case also appearing at step `0` suggests that Phase 3 should not blindly hard-fail on this value until reset-time joint and limit interpretation is confirmed.
+- The target-delta worst case at step `0` suggests that the initial target jump should be analyzed before it becomes a hard gate.
+- Phase 3 thresholds remain inactive.
+
 ## Remaining Risks
 
 The Phase 1 contract passed, but the following risks remain open:
@@ -147,7 +165,8 @@ Candidate thresholds:
 - `time_out`: report-only while horizon-reset interpretation remains the same
 - `base_height`: candidate hard threshold deferred
 - `bad_orientation`: candidate hard threshold deferred
-- `joint_limit_margin_min`: not active until worst-joint and worst-step reporting is added
+- `joint_limit_margin_min`: still inactive until reset-time interpretation is confirmed
+- `target_delta_worst_value`: still inactive until initial-step target-jump behavior is understood
 
 ## Safety Statement
 
