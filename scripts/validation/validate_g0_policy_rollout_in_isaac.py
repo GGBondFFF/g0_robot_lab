@@ -174,7 +174,7 @@ def _compute_target_and_limits(robot: Any, actions, action_joint_order: list[str
     joint_names = [str(name) for name in getattr(data, "joint_names", getattr(robot, "joint_names", []))]
     joint_pos = getattr(data, "joint_pos", None)
     if joint_pos is None:
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
 
     joint_targets = getattr(data, "joint_pos_target", None)
     if joint_targets is None and joint_names:
@@ -214,14 +214,26 @@ def _compute_target_and_limits(robot: Any, actions, action_joint_order: list[str
     if joint_limits is None:
         joint_limits = getattr(data, "joint_pos_limits", None)
     joint_limit_margin = None
+    joint_lower_limit = None
+    joint_upper_limit = None
     if joint_limits is not None:
-        lower = joint_limits[..., 0]
-        upper = joint_limits[..., 1]
-        lower_margin = joint_pos - lower
-        upper_margin = upper - joint_pos
+        joint_lower_limit = joint_limits[..., 0]
+        joint_upper_limit = joint_limits[..., 1]
+        lower_margin = joint_pos - joint_lower_limit
+        upper_margin = joint_upper_limit - joint_pos
         joint_limit_margin = torch.minimum(lower_margin, upper_margin)
 
-    return joint_targets, target_delta, torque, effort_ratio, joint_limit_margin
+    return (
+        joint_targets,
+        target_delta,
+        torque,
+        effort_limit,
+        effort_ratio,
+        joint_pos,
+        joint_lower_limit,
+        joint_upper_limit,
+        joint_limit_margin,
+    )
 
 
 def _build_payload(
@@ -234,7 +246,7 @@ def _build_payload(
     json_path: Path | None,
 ) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "command": command,
         "checkpoint": {"path": str(checkpoint), "sha256": sha256},
         "config": {
@@ -288,7 +300,10 @@ def main() -> int:
         obs = env.get_observations()
         base_env = env.unwrapped
         robot = base_env.scene["robot"]
-        action_joint_order = resolve_action_joint_order(base_env.action_manager, get_robot_joint_names(robot))
+        robot_joint_names = get_robot_joint_names(robot)
+        action_joint_order = resolve_action_joint_order(base_env.action_manager, robot_joint_names)
+        metrics.action_joint_names = action_joint_order
+        metrics.robot_joint_names = robot_joint_names
 
         for step in range(args_cli.steps):
             obs_tensors = list(_iter_obs_tensors(obs))
@@ -307,12 +322,17 @@ def main() -> int:
                 break
 
             obs, _reward, dones, terminated, truncated, _info = _step_env(env, actions)
-            target_joint_pos, target_delta, torque, effort_ratio, joint_limit_margin = _compute_target_and_limits(
-                robot,
-                actions,
-                action_joint_order,
-                G0_DEFAULT_JOINT_POS,
-            )
+            (
+                target_joint_pos,
+                target_delta,
+                torque,
+                effort_limit,
+                effort_ratio,
+                joint_pos,
+                joint_lower_limit,
+                joint_upper_limit,
+                joint_limit_margin,
+            ) = _compute_target_and_limits(robot, actions, action_joint_order, G0_DEFAULT_JOINT_POS)
             metrics.record_step(
                 step=step,
                 robot=robot,
@@ -323,7 +343,11 @@ def main() -> int:
                 target_joint_pos=target_joint_pos,
                 target_delta=target_delta,
                 torque=torque,
+                effort_limit=effort_limit,
                 effort_ratio=effort_ratio,
+                joint_pos=joint_pos,
+                joint_lower_limit=joint_lower_limit,
+                joint_upper_limit=joint_upper_limit,
                 joint_limit_margin=joint_limit_margin,
             )
             policy_reset(dones)
