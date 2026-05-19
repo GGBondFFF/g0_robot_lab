@@ -10,8 +10,6 @@ def test_zero_action_standing_release_gate_500_steps(isaac_sim_app):
     import gymnasium as gym
     import torch
 
-    print("[ZERO-GATE] test entered", flush=True)
-
     import g0_robot_lab.tasks  # noqa: F401
     from g0_robot_lab.tasks.locomotion.robots.g0.velocity_env_cfg import G0RobotLabEnvCfg
 
@@ -35,12 +33,13 @@ def test_zero_action_standing_release_gate_500_steps(isaac_sim_app):
     if hasattr(env_cfg.events, "add_base_mass"):
         env_cfg.events.add_base_mass = None
 
-    # Match fixed standing-command condition.
+    # Keep the release gate deterministic and independent from curriculum updates.
     if hasattr(env_cfg.curriculum, "lin_vel_cmd_levels"):
         env_cfg.curriculum.lin_vel_cmd_levels = None
     if hasattr(env_cfg.curriculum, "ang_vel_cmd_levels"):
         env_cfg.curriculum.ang_vel_cmd_levels = None
 
+    # Fixed standing command.
     env_cfg.commands.base_velocity.rel_standing_envs = 1.0
     env_cfg.commands.base_velocity.rel_heading_envs = 0.0
     env_cfg.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
@@ -55,30 +54,18 @@ def test_zero_action_standing_release_gate_500_steps(isaac_sim_app):
 
     env_cfg.observations.policy.enable_corruption = False
 
-    # Keep the physical terminations intact. This is only to avoid reward-side
-    # contact diagnostics affecting the fixed zero-action release-gate readout.
+    # Remove reward-only contact diagnostics from this fixed standing gate.
+    # Physical terminations remain active below.
     if hasattr(env_cfg.rewards, "undesired_contacts"):
         env_cfg.rewards.undesired_contacts = None
 
-    env = None
+    env = gym.make("G0-Velocity-v0", cfg=env_cfg)
     try:
-        print("[ZERO-GATE] before gym.make", flush=True)
-        env = gym.make("G0-Velocity-v0", cfg=env_cfg)
-        print("[ZERO-GATE] after gym.make", flush=True)
-
-        print("[ZERO-GATE] before env.reset", flush=True)
         env.reset()
-        print("[ZERO-GATE] after env.reset", flush=True)
-
         base_env = env.unwrapped
-        action_dim = base_env.action_manager.total_action_dim
-        action = torch.zeros((1, action_dim), device=base_env.device)
-
-        print(f"[ZERO-GATE] action_dim={action_dim}", flush=True)
-        print("[ZERO-GATE] before 500-step loop", flush=True)
+        action = torch.zeros((1, base_env.action_manager.total_action_dim), device=base_env.device)
 
         failure_report = None
-
         for step in range(500):
             out = env.step(action)
 
@@ -92,28 +79,16 @@ def test_zero_action_standing_release_gate_500_steps(isaac_sim_app):
                 info = out[4]
 
             done = torch.logical_or(terminated, truncated)
-
-            robot = base_env.scene["robot"]
-            root_z = float(robot.data.root_pos_w[0, 2].item())
-
-            if step in (0, 1, 2, 10, 50, 100, 200, 300, 400, 499):
-                print(
-                    "[ZERO-GATE] "
-                    f"step={step} "
-                    f"terminated={bool(terminated[0].item())} "
-                    f"truncated={bool(truncated[0].item())} "
-                    f"done={bool(done[0].item())} "
-                    f"root_z={root_z:.6f}",
-                    flush=True,
-                )
-
             if bool(done[0].item()):
+                robot = base_env.scene["robot"]
+                root_z = float(robot.data.root_pos_w[0, 2].item())
+
                 term_report = {}
-                tm = getattr(base_env, "termination_manager", None)
-                if tm is not None:
+                termination_manager = getattr(base_env, "termination_manager", None)
+                if termination_manager is not None:
                     for name in ("time_out", "base_height", "bad_orientation"):
                         try:
-                            value = tm.get_term(name)
+                            value = termination_manager.get_term(name)
                             if hasattr(value, "detach"):
                                 value = value.detach()
                             if hasattr(value, "__getitem__"):
@@ -132,21 +107,9 @@ def test_zero_action_standing_release_gate_500_steps(isaac_sim_app):
                     "root_z": root_z,
                     "termination_terms": term_report,
                     "info_keys": list(info.keys()) if isinstance(info, dict) else str(type(info)),
-                    "info_log": info.get("log", None) if isinstance(info, dict) else None,
                 }
-                print(f"[ZERO-GATE] FAILURE_REPORT={failure_report}", flush=True)
                 break
 
-        print("[ZERO-GATE] loop finished", flush=True)
-
         assert failure_report is None, f"Zero-action standing failed: {failure_report}"
-
-        print("[ZERO-GATE] assertion passed", flush=True)
-
     finally:
-        print("[ZERO-GATE] entering finally", flush=True)
-        if env is not None:
-            print("[ZERO-GATE] before env.close", flush=True)
-            env.close()
-            print("[ZERO-GATE] after env.close", flush=True)
-        print("[ZERO-GATE] finally done", flush=True)
+        env.close()
