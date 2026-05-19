@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 from pathlib import Path
 
 import pytest
@@ -62,3 +63,22 @@ def _apply_marker_scoped_hardware_guard(
 ) -> None:
     if request.node.get_closest_marker("hardware_forbidden") is not None:
         assert os.environ.get("G0_ALLOW_HARDWARE", "0") == "0"
+
+
+@pytest.fixture(scope="session")
+def isaac_sim_app(request: pytest.FixtureRequest):
+    selected = any(item.get_closest_marker("isaaclab") or item.get_closest_marker("release_gate") for item in request.session.items)
+    if not selected:
+        pytest.skip("Isaac Lab app fixture requested outside isaaclab/release_gate tests.")
+
+    argv_backup = sys.argv[:]
+    sys.argv = [sys.argv[0]]
+    try:
+        from isaaclab.app import AppLauncher
+
+        app_launcher = AppLauncher({"headless": True})
+        simulation_app = app_launcher.app
+    finally:
+        sys.argv = argv_backup
+    yield simulation_app
+    simulation_app.close()
