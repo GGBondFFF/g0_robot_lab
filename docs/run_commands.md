@@ -156,6 +156,45 @@ Release gates are explicit deployment-readiness checks. The policy export releas
 
 The deployment dry-run tier uses fake LowCmd objects and fake transports only. Hardware transport blocking is marker-scoped, so unit and Isaac Lab tests are not affected by a global socket monkeypatch.
 
+## Policy Rollout Safety Validation (Isaac Lab only)
+
+This diagnostic runs Isaac Lab policy rollout validation only. It does not send LowCmd, does not touch real hardware, and is not a hard release gate yet.
+
+These commands must be run from the repository root with the `g0_isaaclab` conda environment active, or through the Isaac Lab runtime wrapper.
+
+500 steps:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_policy_rollout_in_isaac.py \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1
+```
+
+1000 steps:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_policy_rollout_in_isaac.py \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 1000 \
+  --num-envs 1
+```
+
+2000 steps:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_policy_rollout_in_isaac.py \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 2000 \
+  --num-envs 1
+```
+
 ## Zero-Action And Debug Commands
 
 These commands are documented for debugging only. They are not a request to change the scripts in this documentation pass.
