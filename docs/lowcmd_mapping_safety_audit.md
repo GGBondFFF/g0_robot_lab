@@ -2,33 +2,34 @@
 
 ## Purpose
 
-This document records the Phase A audit skeleton for the deployment-facing mapping chain on branch `validation/lowcmd-mapping-safety-audit`.
+This document records the Phase A through Phase E audit status for the deployment-facing G0 dry-run mapping chain on branch `validation/lowcmd-mapping-safety-audit`.
 
-The immediate goal is to document the current software contract for converting the 22-dimensional G0 locomotion policy action into a LowCmd-style dry-run representation, without entering any real hardware path.
+The audited chain is:
+
+`raw policy action -> clipped action [-1, 1] -> target joint position -> safety filter -> FakeLowCmd dry-run command`
+
+The purpose of this work is to validate the software-side contract for a future deployment path without entering any real hardware path.
 
 ## Scope
 
-Phase A established the joint/motor mapping draft and safety-audit document skeleton.
-
-Phase C adds an offline validation script for the Phase B dry-run safety and mapping core.
-
 Included in scope:
 
-- repository state confirmation
-- read-only inspection of the current G0 joint, actuator, dry-run helper, and validation documentation contracts
-- an initial 22-joint mapping table draft
-- explicit notes about assumptions that still require real hardware confirmation
-- offline-only LowCmd mapping contract validation using fake commands
+- joint order and mapping-table audit
+- pure-Python safety filter and LowCmd-style dry-run mapping core
+- offline contract validation
+- Isaac Lab policy sampling through the dry-run mapping chain
+- deployment, unit, Isaac non-release, and Isaac release-gate regression checks
 
-Out of scope in Phase A:
+Out of scope:
 
-- `_safety_filter.py`
-- `_lowcmd_mapping.py`
-- `deployment_dryrun.py` refactor
-- deployment test additions
-- Isaac release gate additions
-- any real LowCmd send path
-- any real hardware connection or motor command path
+- real LowCmd transmission
+- real hardware communication
+- motor power or real command timing
+- hardware-side motor ID confirmation
+- hardware-side direction sign confirmation
+- real emergency-stop validation on hardware
+- MuJoCo sim2sim restoration or continuation
+- reward, PPO, checkpoint, or robot-asset changes
 
 ## No-Hardware Warning
 
@@ -40,51 +41,55 @@ This audit does not confirm motor IDs on hardware.
 
 This audit does not confirm joint direction signs on hardware.
 
-Any future real-robot work still requires a separately approved bring-up procedure, hardware-side motor ID confirmation, and low-gain single-joint sign validation.
+This audit does not validate real communication timing.
 
-Phase C offline validation is dry-run only. It must not send real LowCmd, must not connect to hardware, and must not be interpreted as evidence of real-robot readiness.
+This audit does not validate emergency stop on real hardware.
+
+Passing Phase E still does not indicate real-robot readiness.
+
+The next stage after Phase E is hardware-free communication rehearsal, not real motor command.
 
 ## Relation To Policy Rollout Safety Validation
 
-The prior Isaac Lab policy rollout safety stage established that the fixed checkpoint can complete the current validation-only rollout checks in simulation, but it also exposed deployment-relevant risks:
+The earlier Isaac Lab policy rollout safety validation established that the fixed checkpoint can satisfy the current simulation-only rollout contract, but also showed that raw policy actions can exceed `[-1, 1]`.
 
-- raw policy action can exceed `[-1, 1]`
-- any deployment-facing path must clip before producing any LowCmd-compatible representation
-- effort ratio, joint-limit margin, and target-delta findings remain diagnostic and do not imply hardware readiness
+That earlier result is the reason this audit treats clipping as mandatory before any LowCmd-compatible representation is produced. The current audit therefore focuses on proving the software contract from clipped policy output into a fake LowCmd dry-run command, while explicitly preventing any hardware path.
 
-This audit therefore treats the deployment-facing chain as:
+## Mapping Table Status
 
-`raw policy action -> clipped action [-1, 1] -> target joint position -> safety filter -> LowCmd-style dry-run command`
+The current 22-row mapping table remains a source-backed software draft, not a hardware-confirmed deployment table.
 
-The current offline dry-run helper already applies clipping before `default_joint_pos + 0.12 * clipped_action`, which is consistent with the policy rollout diagnostic requirement. Phase A does not extend that helper; it only documents the current state.
+Current status:
 
-## Repository-Backed Contract Snapshot
-
-- Branch under audit: `validation/lowcmd-mapping-safety-audit`
-- Base branch ancestor confirmed: `validation/isaac-lowcmd-dryrun`
-- Policy action order source: `G0_JOINT_SDK_NAMES`
-- Action scale source: `JointPositionActionCfg(scale=0.12, use_default_offset=True, preserve_order=True)`
-- Default pose source: `G0_DEFAULT_JOINT_POS`
-- Dry-run helper behavior source: clip action to `[-1, 1]`, then compute `default + action_scale * clipped`
-- Servo grouping source: `G0_RIGHT_ANGLE_SERVO_JOINT_NAMES` plus the remaining SDK joints as standard servos
-- Position-limit source in this Phase A draft: URDF `<limit lower=... upper=...>` values
-- Important caveat: `G0ArticulationCfg.soft_joint_pos_limit_factor = 0.9` is configured in `g0.py`, but Phase A does not derive the runtime Isaac soft limits yet, so the table below uses repository-visible URDF limits as the currently inspectable source-backed draft bounds
+- joint order is sourced from `G0_JOINT_SDK_NAMES`
+- default pose is sourced from `G0_DEFAULT_JOINT_POS`
+- action scale is sourced from `JointPositionActionCfg(scale=0.12, use_default_offset=True, preserve_order=True)`
+- effort and velocity limits are sourced from `g0_actuators.py`
+- position limits in this audit are sourced from the URDF `<limit>` values
+- `motor_id = index` is treated as a software convention only
+- direction/sign notes remain software-side interpretation only
 
 ## Mapping Assumptions Requiring Future Hardware Confirmation
 
 ### Motor ID
 
-Phase A documents `motor_id = index` as the current software convention only.
+`motor_id = index` is the current software convention only.
 
-This convention is consistent with the SDK-ordered 22-joint action contract and is a reasonable draft for dry-run mapping tables, but no authoritative hardware-side confirmation was found in the inspected repository sources.
+This convention is consistent with the SDK-ordered 22-joint action contract and is used throughout the dry-run validator and deployment tests, but it is not hardware-confirmed by an authoritative repository source.
 
 Real robot deployment still requires hardware-side motor ID confirmation.
 
 ### Direction Sign
 
-The default standing pose and mirrored URDF axes strongly suggest the current software sign convention for several paired pitch joints, but Phase A does not treat those signs as hardware-confirmed.
+The mirrored default standing pose and URDF axis conventions strongly suggest the current software sign interpretation, but the audit does not claim that those signs are hardware-confirmed.
 
-Real robot deployment still requires low-gain single-joint sign validation before any motor command path is enabled.
+Real robot deployment still requires low-gain single-joint sign validation.
+
+### Position Limits
+
+This audit uses URDF limit values for the dry-run mapping tables and validators.
+
+`soft_joint_pos_limit_factor = 0.9` exists in `g0.py`, but this audit does not claim that the current table is the final hardware-side enforcement source.
 
 ## Initial 22-Joint Mapping Table Draft
 
@@ -113,92 +118,174 @@ Real robot deployment still requires low-gain single-joint sign validation befor
 | 20 | 20 | r_shoulder_yaw_joint | 0.00 | 0.12 | standard | 0.5 | 31.416 | -1.20 | 1.20 | Zero default; yaw sign still needs hardware validation. | SDK order + default pose + URDF limit + standard servo grouping are repo-backed; `motor_id=index` is assumption. |
 | 21 | 21 | r_elbow_pitch_joint | -0.97 | 0.12 | right_angle | 0.5833 | 26.928 | -1.20 | 0.00 | Right elbow pitch default is negative; software sign only, not hardware-confirmed. | SDK order + default pose + URDF limit + right-angle servo grouping are repo-backed; `motor_id=index` is assumption. |
 
-## Phase A Findings
+## Safety Filter Contract
 
-### Files Inspected
+The Phase B safety filter is pure Python only.
 
-- `docs/superpowers/plans/2026-05-20-lowcmd-mapping-safety-audit.md`
-- `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/g0.py`
-- `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/g0_actuators.py`
-- `source/g0_robot_lab/g0_robot_lab/tasks/locomotion/robots/g0/velocity_env_cfg.py`
-- `tests/unit/test_g0_joint_contract.py`
-- `tests/unit/test_velocity_env_static_contract.py`
-- `tests/helpers/deployment_dryrun.py`
-- `tests/helpers/isaaclab_runtime.py`
-- `docs/observation_action_interface.md`
-- `docs/pre_deployment_validation.md`
-- `docs/run_commands.md`
-- `docs/policy_rollout_safety_validation.md`
-- `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/inspect_g0_urdf.py`
-- `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/urdf/g0.urdf`
-- `docs/g0_actuator_parameters.md`
+Required behavior:
 
-### What Was Confirmed
+- reject `hardware_enabled=True`
+- reject NaN or Inf raw action
+- clip raw action to `[-1, 1]`
+- compute `target = default_joint_pos + action_scale * clipped_action`
+- clamp target to position limits
+- clamp action changes against `max_action_delta` when previous action exists
+- clamp target changes against `max_target_delta` when previous target exists
+- reject stale observations when `now - last_obs_time > max_command_age_s`
+- on `emergency_stop=True`, return a safe hold command rather than an unsafe target jump
+- ensure final `q`, `dq`, and `tau_ff` values are finite
 
-- The current branch is `validation/lowcmd-mapping-safety-audit`.
-- `validation/isaac-lowcmd-dryrun` is an ancestor of the current branch.
-- The current worktree includes the untracked plan file `docs/superpowers/plans/2026-05-20-lowcmd-mapping-safety-audit.md`.
-- The deployment-facing action order is the 22-joint `G0_JOINT_SDK_NAMES` list.
-- The current policy action scale is `0.12`, with `use_default_offset=True` and `preserve_order=True`.
-- The default standing pose covers exactly the SDK joint set and uses mirrored left/right pitch defaults for several paired joints.
-- The current dry-run helper clips each raw action to `[-1, 1]` before computing `target_position = default_joint_pos + action_scale * clipped`.
-- The current servo partition is 16 standard joints plus 6 right-angle joints.
-- Repository-visible URDF joint limit values exist for all 22 movable joints.
+The current implementation is intentionally dry-run-only and does not model a hardware transport.
 
-### What Remains Uncertain
+## LowCmd-Style Dry-Run Command Schema
 
-- `motor_id = index` is not hardware-confirmed in the inspected repository.
-- Joint direction signs are not hardware-confirmed in the inspected repository.
-- The right-angle ankle assignment to `*_ankle_pitch_joint` is explicitly documented as an assumption in `g0.py`.
-- Phase A does not yet derive Isaac runtime `soft_joint_pos_limits`; the table currently uses URDF limit values rather than runtime soft-limit outputs.
-- No repository source inspected in Phase A establishes hardware-side PD, dq, or torque-feedforward deployment behavior for a real LowCmd path.
+The Phase B/C/D dry-run mapping core produces a fake command object with:
 
-### What Must Be Resolved Before Real Hardware
+- `FakeLowCmd.dry_run`
+- `FakeLowCmd.control_dt`
+- `FakeLowCmd.motors`
 
-- hardware-side motor ID confirmation for all 22 joints
-- low-gain single-joint sign validation for all command directions
-- confirmation of which ankle joints use right-angle servos on real hardware
-- confirmation of the exact deployment-side position-limit source to enforce, including any soft-limit reduction versus raw URDF bounds
-- implementation and validation of an explicit safety filter before any LowCmd-compatible real command path is considered
+Each `FakeMotorCommand` contains:
 
-## Phase C Offline Validation
+- `motor_id`
+- `joint_name`
+- `q`
+- `dq`
+- `kp`
+- `kd`
+- `tau_ff`
+- `effort_limit`
+- `source_action_index`
+- `source_raw_action`
+- `source_clipped_action`
 
-Phase C adds:
+Current dry-run placeholders:
 
-- `scripts/validation/validate_g0_lowcmd_mapping.py`
-- optional JSON output at `logs/validation/lowcmd_mapping_offline.json`
+- `kp = 0`
+- `kd = 0`
+- `dq = 0`
+- `tau_ff = 0`
 
-Command:
+These placeholders are acceptable for software-side dry-run validation only and are not deployment tuning.
+
+## Hard FAIL vs Diagnostic-Only
+
+| Condition | Status |
+|---|---|
+| checkpoint missing | hard FAIL |
+| checkpoint SHA256 mismatch | hard FAIL |
+| env construction failure | hard FAIL |
+| policy load failure | hard FAIL |
+| NaN or Inf action | hard FAIL |
+| FakeLowCmd `dry_run is not True` | hard FAIL |
+| motor count != 22 | hard FAIL |
+| `motor_id` mismatch | hard FAIL |
+| joint order mismatch | hard FAIL |
+| non-finite command field | hard FAIL |
+| `q` outside safety limits after filtering | hard FAIL |
+| `hardware_enabled=True` | hard FAIL |
+| stale observation reject missing | hard FAIL |
+| emergency stop ignored | hard FAIL |
+| raw action used directly without clipping | hard FAIL |
+| raw action out-of-range count | diagnostic-only |
+| target delta spikes within accepted safety contract | diagnostic-only |
+| safety clamp correction magnitude | diagnostic-only |
+| effort ratio saturation from separate rollout validation | diagnostic-only |
+| joint-limit-margin interpretation at reset from separate rollout validation | diagnostic-only |
+| `kp = 0`, `kd = 0` in dry-run path | diagnostic-only |
+
+## Phase A Through Phase D Implementation Summary
+
+### Phase A
+
+- confirmed repository state and base branch ancestry
+- inspected robot, actuator, task, helper, and documentation sources
+- created the initial 22-joint mapping audit document
+
+### Phase B
+
+- added `scripts/validation/_safety_filter.py`
+- added `scripts/validation/_lowcmd_mapping.py`
+- kept `tests/helpers/deployment_dryrun.py` backward-compatible
+- added deployment contract tests for the safety filter and mapping core
+
+### Phase C
+
+- added `scripts/validation/_joint_contract_tables.py`
+- added `scripts/validation/validate_g0_lowcmd_mapping.py --mode offline-contract`
+- added optional JSON output for offline validation
+
+### Phase D
+
+- extended `validate_g0_lowcmd_mapping.py` with `--mode isaac-policy-sample`
+- reused the existing Isaac rollout loader and fixed validation environment path
+- sampled the fixed checkpoint in Isaac Lab and mapped policy actions through the dry-run chain only
+- confirmed no hardware path was entered
+
+## Phase C Offline Validation Results
+
+Latest known result:
+
+- result: `PASS`
+- joint count: `22`
+- command count: `22`
+- passed cases: `zero_action`, `all_plus_one`, `all_minus_one`, `overflow_action_ten`, `fast_action_jump`, `emergency_stop`
+- rejected cases: `nan_action`, `inf_action`, `stale_observation`, `hardware_enabled_true`
+- warning cases: `fast_action_jump`, `emergency_stop`
+- motor_id convention: `motor_id = index`, software convention only
+- no-hardware confirmation: `True`
+- action clipping confirmation: `True`
+- target mapping max error: `0`
+
+Meaning:
+
+- expected rejects rejected cleanly
+- the dry-run mapping contract remained finite and bounded
+- no hardware path was touched
+
+## Phase D Isaac Policy Sampling Results
+
+Latest known result:
+
+- result: `PASS`
+- task: `G0-Velocity-v0`
+- checkpoint sha256: `1dc0c434a4b991eaaa435a21b9d4265e0267eb781b69b132bd75a0b5883928cd`
+- steps: `500`
+- num_envs: `1`
+- raw action min/max/mean/std: `-2.9595861434936523 / 2.4234588146209717 / -0.028617099631916394 / 0.7163661538912613`
+- raw action out_of_range_count: `1814`
+- clipped action min/max: `-1.0 / 1.0`
+- max target mapping error: `0.0`
+- max safety clamp correction: `0.0`
+- rejected step count: `0`
+- emergency stop count: `0`
+- stale observation count: `0`
+- motor_id mismatch count: `0`
+- non-finite command count: `0`
+- worst raw action: `step=5, joint=r_ankle_roll_joint, value=-2.9595861434936523`
+- worst target delta: `step=242, joint=l_hip_roll_joint, value=0.0761653697490692`
+- worst safety clamp: `none`
+- dry_run_only: `True`
+- no-hardware confirmation: `True`
+
+Meaning:
+
+- raw policy actions still exceed `[-1, 1]` often, as expected from prior rollout diagnostics
+- clipping remained bounded at `[-1, 1]`
+- the dry-run mapping chain stayed finite and contract-clean for all 500 sampled steps
+- no safety clamp correction was needed for the sampled 500-step run
+- no hardware path was touched
+
+## Full Regression Results
+
+The latest Phase E regression run used the following commands:
 
 ```bash
 python scripts/validation/validate_g0_lowcmd_mapping.py \
   --mode offline-contract \
   --emit-json logs/validation/lowcmd_mapping_offline.json
-```
 
-This script is offline only and uses the pure-Python safety filter plus the fake LowCmd dry-run mapping core. It does not import Isaac, does not start `AppLauncher`, does not use sockets or DDS, does not use a real LowCmd SDK, and does not connect to hardware.
-
-The offline validator checks:
-
-- 22-joint mapping table shape and order
-- `motor_id = index` as the current software convention
-- action clipping before target generation
-- `target = default_joint_pos + action_scale * clipped_action` for the normal contract cases
-- position-limit-safe, finite `q` outputs
-- 22 finite dry-run motor commands
-- expected rejects for NaN, Inf, stale observations, and `hardware_enabled=True`
-- safe hold behavior for `emergency_stop=True`
-
-Passing this offline validator is useful for deployment-path contract confidence only. It is not a release gate, not a hardware check, and not a real-robot readiness signal.
-
-## Phase D Isaac Policy Sampling
-
-Phase D extends the validator with an Isaac policy-sampling mode that reuses the fixed checkpoint and fixed validation environment conditions from the policy rollout workflow, but still maps actions into fake LowCmd dry-run commands only.
-
-Command:
-
-```bash
-/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
   --mode isaac-policy-sample \
   --task G0-Velocity-v0 \
   --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
@@ -206,17 +293,42 @@ Command:
   --steps 500 \
   --num-envs 1 \
   --emit-json logs/validation/lowcmd_mapping_isaac_500.json
+
+conda run -n g0_isaaclab python -m pytest -q tests/deployment
+conda run -n g0_isaaclab python -m pytest -q tests/unit
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p -m pytest -q tests/isaaclab -m "not release_gate"
+TERM=xterm conda run -n g0_isaaclab /home/lz/IsaacLab/isaaclab.sh -p -m pytest -q tests/isaaclab -m "release_gate"
 ```
 
-This stage is Isaac policy sampling only.
+Latest regression outcomes:
 
-It still:
+- offline validator: `PASS`
+- Isaac policy sample: `PASS`
+- deployment tests: `27 passed in 0.83s`
+- unit tests: `16 passed in 0.03s`
+- Isaac Lab non-release smoke: exit `0`, output `.`
+- Isaac Lab release-gate selection: exit `0`, output `..`
 
-- uses dry-run fake LowCmd commands only
-- sends no real LowCmd
-- touches no hardware path
-- does not indicate real-robot readiness
+## Forbidden Path Check
 
-The Phase D chain is:
+A repository scan for `socket`, `DDS`, `LowCmd`, `Unitree`, `sendto`, and `send(` across `scripts/validation`, `tests/helpers`, `tests/deployment`, and `docs` found:
 
-`raw policy action -> clipped action [-1, 1] -> target joint position -> safety filter -> FakeLowCmd dry-run command`
+- dry-run command names and documentation references
+- deployment guardrail tests that intentionally block real socket sends
+- no real hardware transport path added in `scripts/validation`
+- no DDS path added in `scripts/validation`
+- no real LowCmd SDK path added in `scripts/validation`
+
+## Deployment-Readiness Disclaimer
+
+Passing Phase E does not authorize real robot deployment.
+
+Passing Phase E does not confirm hardware motor IDs.
+
+Passing Phase E does not confirm hardware direction signs.
+
+Passing Phase E does not validate real communication timing.
+
+Passing Phase E does not validate emergency stop on real hardware.
+
+The next stage after Phase E is hardware-free communication rehearsal, not real motor command.
