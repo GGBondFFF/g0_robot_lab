@@ -50,6 +50,31 @@ This validator:
 
 Passing this offline validator does not indicate real-robot readiness and does not authorize any real LowCmd transmission.
 
+## Isaac Policy Sampling For LowCmd Dry-Run Mapping
+
+Phase D extends the mapping validator with an Isaac Lab policy-sampling mode:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode isaac-policy-sample \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1 \
+  --emit-json logs/validation/lowcmd_mapping_isaac_500.json
+```
+
+This mode:
+
+- runs Isaac Lab only under the fixed validation conditions already used for policy rollout checks
+- loads the fixed raw RSL-RL checkpoint after SHA256 verification
+- samples policy actions and maps them through the dry-run chain only
+- never sends transport, never imports a real LowCmd SDK, and never enables hardware
+- checks dry-run command finiteness, motor ordering, `motor_id = index` as the current software convention, and safety-filtered target bounds
+
+Passing this stage still does not indicate real-robot readiness and does not authorize real LowCmd or hardware bring-up.
+
 ## Isaac Lab Headless Tier
 
 Headless Isaac Lab smoke tests:

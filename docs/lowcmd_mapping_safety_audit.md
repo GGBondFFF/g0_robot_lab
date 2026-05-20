@@ -190,3 +190,33 @@ The offline validator checks:
 - safe hold behavior for `emergency_stop=True`
 
 Passing this offline validator is useful for deployment-path contract confidence only. It is not a release gate, not a hardware check, and not a real-robot readiness signal.
+
+## Phase D Isaac Policy Sampling
+
+Phase D extends the validator with an Isaac policy-sampling mode that reuses the fixed checkpoint and fixed validation environment conditions from the policy rollout workflow, but still maps actions into fake LowCmd dry-run commands only.
+
+Command:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode isaac-policy-sample \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1 \
+  --emit-json logs/validation/lowcmd_mapping_isaac_500.json
+```
+
+This stage is Isaac policy sampling only.
+
+It still:
+
+- uses dry-run fake LowCmd commands only
+- sends no real LowCmd
+- touches no hardware path
+- does not indicate real-robot readiness
+
+The Phase D chain is:
+
+`raw policy action -> clipped action [-1, 1] -> target joint position -> safety filter -> FakeLowCmd dry-run command`

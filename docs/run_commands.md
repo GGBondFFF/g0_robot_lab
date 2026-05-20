@@ -148,6 +148,21 @@ python scripts/validation/validate_g0_lowcmd_mapping.py \
 
 This Phase C validator is offline only. It does not import Isaac, does not start `AppLauncher`, does not send real LowCmd, does not connect to hardware, and does not indicate real-robot readiness.
 
+Isaac policy sampling for LowCmd dry-run mapping:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode isaac-policy-sample \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1 \
+  --emit-json logs/validation/lowcmd_mapping_isaac_500.json
+```
+
+This Phase D command is Isaac policy sampling only. It still produces dry-run fake LowCmd commands only, does not send real LowCmd, does not connect to hardware, and does not indicate real-robot readiness.
+
 Isaac Lab headless smoke tier:
 
 ```bash
