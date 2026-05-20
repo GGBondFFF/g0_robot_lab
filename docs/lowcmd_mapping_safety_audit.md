@@ -332,3 +332,42 @@ Passing Phase E does not validate real communication timing.
 Passing Phase E does not validate emergency stop on real hardware.
 
 The next stage after Phase E is hardware-free communication rehearsal, not real motor command.
+
+## Phase F Release Gate
+
+Phase F adds an optional Isaac Lab release gate:
+
+`tests/isaaclab/test_release_gate_lowcmd_mapping_chain.py`
+
+This gate runs the fixed 500-step Isaac policy sample through the dry-run mapping chain only.
+
+Hard-fail policy for this gate:
+
+- checkpoint missing
+- checkpoint SHA256 mismatch
+- Isaac env construction failure
+- policy load failure
+- raw action contains NaN or Inf
+- clipped action contains NaN or Inf
+- clipped action leaves `[-1, 1]` beyond tiny tolerance
+- `FakeLowCmd.dry_run is not True`
+- motor count != 22
+- `motor_id != index`
+- joint order mismatch
+- any `q`, `dq`, `kp`, `kd`, or `tau_ff` is non-finite
+- `q` after safety filtering is outside configured position limits
+- target mapping error exceeds tolerance
+- rejected step count > 0 during normal sampling
+- emergency stop count != 0 during normal sampling
+- stale observation count != 0 during normal sampling
+
+Diagnostic-only in this gate:
+
+- raw policy action outside `[-1, 1]`
+- raw action out-of-range count
+- worst raw action value
+- target delta observations
+- prior rollout effort-ratio diagnostics
+- step-0 transient notes from other validation stages
+
+Passing this gate validates the software dry-run mapping chain only. It does not authorize real LowCmd, real hardware, or real-robot deployment.

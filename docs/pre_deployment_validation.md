@@ -75,6 +75,26 @@ This mode:
 
 Passing this stage still does not indicate real-robot readiness and does not authorize real LowCmd or hardware bring-up.
 
+## Isaac LowCmd Mapping Release Gate
+
+Phase F adds an optional 500-step Isaac Lab release gate for the dry-run LowCmd mapping chain:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q \
+  tests/isaaclab/test_release_gate_lowcmd_mapping_chain.py \
+  -s --tb=long -ra
+```
+
+This gate:
+
+- runs the fixed checkpoint for 500 steps in Isaac Lab only
+- maps sampled policy actions through the dry-run mapping chain only
+- hard-fails on dry-run command contract errors
+- does not send real LowCmd
+- does not connect to hardware
+
+Passing this gate still does not indicate real-robot readiness.
+
 ## Isaac Lab Headless Tier
 
 Headless Isaac Lab smoke tests:
@@ -90,7 +110,7 @@ The smoke tier uses a combined runtime smoke test to avoid repeated `gym.make`/`
 Explicit deployment-readiness gates:
 
 ```bash
-/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q tests/isaaclab -m "release_gate"
 ```
 
 The policy export release gate passed in the current implementation. It runs `scripts/rsl_rl/play.py` with `G0_ALLOW_HARDWARE=0` in the subprocess environment and verifies that deployment inference artifacts can be exported from the raw RSL-RL checkpoint when the checkpoint exists.

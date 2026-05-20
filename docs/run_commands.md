@@ -163,6 +163,16 @@ Isaac policy sampling for LowCmd dry-run mapping:
 
 This Phase D command is Isaac policy sampling only. It still produces dry-run fake LowCmd commands only, does not send real LowCmd, does not connect to hardware, and does not indicate real-robot readiness.
 
+Individual LowCmd dry-run mapping release gate:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q \
+  tests/isaaclab/test_release_gate_lowcmd_mapping_chain.py \
+  -s --tb=long -ra
+```
+
+This Phase F gate validates the software dry-run mapping chain only. Passing it does not authorize real LowCmd or real hardware and does not indicate real-robot readiness.
+
 Isaac Lab headless smoke tier:
 
 ```bash
@@ -172,7 +182,7 @@ Isaac Lab headless smoke tier:
 Release-gate tier:
 
 ```bash
-/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q tests/isaaclab -m "release_gate"
 ```
 
 Policy rollout safety release gate:
