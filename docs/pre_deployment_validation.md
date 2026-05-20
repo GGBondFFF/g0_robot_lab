@@ -29,6 +29,27 @@ python -m pytest tests/deployment -m "deployment_dryrun and hardware_forbidden"
 
 This tier uses fake LowCmd objects and fake transports only. Hardware transport blocking is marker-scoped, not global, so unit and Isaac Lab tests still see the normal socket class. No test should send real LowCmd or motor commands.
 
+## Offline LowCmd Mapping Validation Tier
+
+Phase C adds an offline-only LowCmd mapping validator:
+
+```bash
+python scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode offline-contract \
+  --emit-json logs/validation/lowcmd_mapping_offline.json
+```
+
+This validator:
+
+- does not import Isaac
+- does not start `AppLauncher`
+- does not use sockets, DDS, or a real LowCmd SDK
+- does not connect to hardware
+- does enforce dry-run-only behavior through the fake LowCmd mapping path
+- does check joint order, `motor_id = index` as the current software convention, action clipping, target reconstruction, finite command fields, and expected reject behavior
+
+Passing this offline validator does not indicate real-robot readiness and does not authorize any real LowCmd transmission.
+
 ## Isaac Lab Headless Tier
 
 Headless Isaac Lab smoke tests:

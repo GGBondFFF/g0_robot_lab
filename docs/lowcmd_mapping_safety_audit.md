@@ -8,7 +8,9 @@ The immediate goal is to document the current software contract for converting t
 
 ## Scope
 
-Phase A is documentation and read-only inspection only.
+Phase A established the joint/motor mapping draft and safety-audit document skeleton.
+
+Phase C adds an offline validation script for the Phase B dry-run safety and mapping core.
 
 Included in scope:
 
@@ -16,6 +18,7 @@ Included in scope:
 - read-only inspection of the current G0 joint, actuator, dry-run helper, and validation documentation contracts
 - an initial 22-joint mapping table draft
 - explicit notes about assumptions that still require real hardware confirmation
+- offline-only LowCmd mapping contract validation using fake commands
 
 Out of scope in Phase A:
 
@@ -38,6 +41,8 @@ This audit does not confirm motor IDs on hardware.
 This audit does not confirm joint direction signs on hardware.
 
 Any future real-robot work still requires a separately approved bring-up procedure, hardware-side motor ID confirmation, and low-gain single-joint sign validation.
+
+Phase C offline validation is dry-run only. It must not send real LowCmd, must not connect to hardware, and must not be interpreted as evidence of real-robot readiness.
 
 ## Relation To Policy Rollout Safety Validation
 
@@ -156,3 +161,32 @@ Real robot deployment still requires low-gain single-joint sign validation befor
 - confirmation of the exact deployment-side position-limit source to enforce, including any soft-limit reduction versus raw URDF bounds
 - implementation and validation of an explicit safety filter before any LowCmd-compatible real command path is considered
 
+## Phase C Offline Validation
+
+Phase C adds:
+
+- `scripts/validation/validate_g0_lowcmd_mapping.py`
+- optional JSON output at `logs/validation/lowcmd_mapping_offline.json`
+
+Command:
+
+```bash
+python scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode offline-contract \
+  --emit-json logs/validation/lowcmd_mapping_offline.json
+```
+
+This script is offline only and uses the pure-Python safety filter plus the fake LowCmd dry-run mapping core. It does not import Isaac, does not start `AppLauncher`, does not use sockets or DDS, does not use a real LowCmd SDK, and does not connect to hardware.
+
+The offline validator checks:
+
+- 22-joint mapping table shape and order
+- `motor_id = index` as the current software convention
+- action clipping before target generation
+- `target = default_joint_pos + action_scale * clipped_action` for the normal contract cases
+- position-limit-safe, finite `q` outputs
+- 22 finite dry-run motor commands
+- expected rejects for NaN, Inf, stale observations, and `hardware_enabled=True`
+- safe hold behavior for `emergency_stop=True`
+
+Passing this offline validator is useful for deployment-path contract confidence only. It is not a release gate, not a hardware check, and not a real-robot readiness signal.
