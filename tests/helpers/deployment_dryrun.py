@@ -1,25 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
 from typing import Mapping, Sequence
 
-
-@dataclass(frozen=True)
-class FakeMotorCommand:
-    joint_name: str
-    target_position: float
-    kp: float
-    kd: float
-    torque_ff: float
-    source_action_index: int
-    source_action_value: float
-
-
-@dataclass(frozen=True)
-class FakeLowCmd:
-    dry_run: bool
-    control_dt: float
-    motors: tuple[FakeMotorCommand, ...]
+from scripts.validation._lowcmd_mapping import (
+    FakeLowCmd,
+    FakeMotorCommand,
+    build_default_safety_limits,
+    map_policy_to_lowcmd_dry_run,
+)
+from scripts.validation._safety_filter import SafetyLimits, SafetyState
 
 
 class FakeLowCmdTransport:
@@ -40,29 +30,39 @@ def build_fake_lowcmd(
     action_scale: float,
     kp_by_joint: Mapping[str, float] | None = None,
     kd_by_joint: Mapping[str, float] | None = None,
+    limits: SafetyLimits | None = None,
+    state: SafetyState | None = None,
     control_dt: float = 0.02,
     dry_run: bool = True,
 ) -> FakeLowCmd:
     if not dry_run:
         raise AssertionError("Tests must not build non-dry-run LowCmd objects.")
-    if len(policy_action) != len(joint_order):
-        raise ValueError(f"Expected {len(joint_order)} actions, got {len(policy_action)}.")
-
-    kp_by_joint = kp_by_joint or {}
-    kd_by_joint = kd_by_joint or {}
-    motors = []
-    for index, joint_name in enumerate(joint_order):
-        action_value = float(policy_action[index])
-        clipped = max(-1.0, min(1.0, action_value))
-        motors.append(
-            FakeMotorCommand(
-                joint_name=joint_name,
-                target_position=float(default_joint_pos[joint_name]) + action_scale * clipped,
-                kp=float(kp_by_joint.get(joint_name, 0.0)),
-                kd=float(kd_by_joint.get(joint_name, 0.0)),
-                torque_ff=0.0,
-                source_action_index=index,
-                source_action_value=action_value,
-            )
+    joint_names = tuple(str(name) for name in joint_order)
+    if limits is None:
+        baseline_limits = build_default_safety_limits(joint_names)
+        resolved_limits = SafetyLimits(
+            pos_lower={joint_name: -math.inf for joint_name in joint_names},
+            pos_upper={joint_name: math.inf for joint_name in joint_names},
+            vel_limit=dict(baseline_limits.vel_limit),
+            effort_limit=dict(baseline_limits.effort_limit),
+            max_target_delta=math.inf,
+            max_action_delta=math.inf,
+            max_command_age_s=math.inf,
         )
-    return FakeLowCmd(dry_run=True, control_dt=control_dt, motors=tuple(motors))
+    else:
+        resolved_limits = limits
+    resolved_state = state or SafetyState()
+    return map_policy_to_lowcmd_dry_run(
+        policy_action,
+        joint_order=joint_names,
+        default_joint_pos=default_joint_pos,
+        action_scale=action_scale,
+        limits=resolved_limits,
+        state=resolved_state,
+        kp_by_joint=kp_by_joint,
+        kd_by_joint=kd_by_joint,
+        control_dt=control_dt,
+        now=resolved_state.last_obs_time if resolved_state.last_obs_time is not None else 0.0,
+        emergency_stop=False,
+        hardware_enabled=False,
+    )

@@ -29,6 +29,72 @@ python -m pytest tests/deployment -m "deployment_dryrun and hardware_forbidden"
 
 This tier uses fake LowCmd objects and fake transports only. Hardware transport blocking is marker-scoped, not global, so unit and Isaac Lab tests still see the normal socket class. No test should send real LowCmd or motor commands.
 
+## Offline LowCmd Mapping Validation Tier
+
+Phase C adds an offline-only LowCmd mapping validator:
+
+```bash
+python scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode offline-contract \
+  --emit-json logs/validation/lowcmd_mapping_offline.json
+```
+
+This validator:
+
+- does not import Isaac
+- does not start `AppLauncher`
+- does not use sockets, DDS, or a real LowCmd SDK
+- does not connect to hardware
+- does enforce dry-run-only behavior through the fake LowCmd mapping path
+- does check joint order, `motor_id = index` as the current software convention, action clipping, target reconstruction, finite command fields, and expected reject behavior
+
+Passing this offline validator does not indicate real-robot readiness and does not authorize any real LowCmd transmission.
+
+## Isaac Policy Sampling For LowCmd Dry-Run Mapping
+
+Phase D extends the mapping validator with an Isaac Lab policy-sampling mode:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode isaac-policy-sample \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1 \
+  --emit-json logs/validation/lowcmd_mapping_isaac_500.json
+```
+
+This mode:
+
+- runs Isaac Lab only under the fixed validation conditions already used for policy rollout checks
+- loads the fixed raw RSL-RL checkpoint after SHA256 verification
+- samples policy actions and maps them through the dry-run chain only
+- never sends transport, never imports a real LowCmd SDK, and never enables hardware
+- checks dry-run command finiteness, motor ordering, `motor_id = index` as the current software convention, and safety-filtered target bounds
+
+Passing this stage still does not indicate real-robot readiness and does not authorize real LowCmd or hardware bring-up.
+
+## Isaac LowCmd Mapping Release Gate
+
+Phase F adds an optional 500-step Isaac Lab release gate for the dry-run LowCmd mapping chain:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q \
+  tests/isaaclab/test_release_gate_lowcmd_mapping_chain.py \
+  -s --tb=long -ra
+```
+
+This gate:
+
+- runs the fixed checkpoint for 500 steps in Isaac Lab only
+- maps sampled policy actions through the dry-run mapping chain only
+- hard-fails on dry-run command contract errors
+- does not send real LowCmd
+- does not connect to hardware
+
+Passing this gate still does not indicate real-robot readiness.
+
 ## Isaac Lab Headless Tier
 
 Headless Isaac Lab smoke tests:
@@ -44,7 +110,7 @@ The smoke tier uses a combined runtime smoke test to avoid repeated `gym.make`/`
 Explicit deployment-readiness gates:
 
 ```bash
-/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q tests/isaaclab -m "release_gate"
 ```
 
 The policy export release gate passed in the current implementation. It runs `scripts/rsl_rl/play.py` with `G0_ALLOW_HARDWARE=0` in the subprocess environment and verifies that deployment inference artifacts can be exported from the raw RSL-RL checkpoint when the checkpoint exists.

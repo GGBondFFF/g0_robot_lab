@@ -138,6 +138,41 @@ Deployment dry-run tier:
 python -m pytest tests/deployment -m "deployment_dryrun and hardware_forbidden"
 ```
 
+Offline LowCmd mapping validation:
+
+```bash
+python scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode offline-contract \
+  --emit-json logs/validation/lowcmd_mapping_offline.json
+```
+
+This Phase C validator is offline only. It does not import Isaac, does not start `AppLauncher`, does not send real LowCmd, does not connect to hardware, and does not indicate real-robot readiness.
+
+Isaac policy sampling for LowCmd dry-run mapping:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p scripts/validation/validate_g0_lowcmd_mapping.py \
+  --mode isaac-policy-sample \
+  --task G0-Velocity-v0 \
+  --checkpoint logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/model_9999.pt \
+  --headless \
+  --steps 500 \
+  --num-envs 1 \
+  --emit-json logs/validation/lowcmd_mapping_isaac_500.json
+```
+
+This Phase D command is Isaac policy sampling only. It still produces dry-run fake LowCmd commands only, does not send real LowCmd, does not connect to hardware, and does not indicate real-robot readiness.
+
+Individual LowCmd dry-run mapping release gate:
+
+```bash
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q \
+  tests/isaaclab/test_release_gate_lowcmd_mapping_chain.py \
+  -s --tb=long -ra
+```
+
+This Phase F gate validates the software dry-run mapping chain only. Passing it does not authorize real LowCmd or real hardware and does not indicate real-robot readiness.
+
 Isaac Lab headless smoke tier:
 
 ```bash
@@ -147,7 +182,7 @@ Isaac Lab headless smoke tier:
 Release-gate tier:
 
 ```bash
-/home/lz/IsaacLab/isaaclab.sh -p -m pytest tests -m "release_gate"
+/home/lz/IsaacLab/isaaclab.sh -p -m pytest -q tests/isaaclab -m "release_gate"
 ```
 
 Policy rollout safety release gate:
@@ -163,6 +198,8 @@ The Isaac Lab smoke tier is selected by `pytest.mark.isaaclab` and uses a combin
 Release gates are explicit deployment-readiness checks. The policy export release gate passed in the current implementation. The zero-action 500-step release gate is explicitly selectable with `-m "release_gate"` and may report a physical-readiness failure; that result is a deployment readiness signal, not a default smoke failure.
 
 The deployment dry-run tier uses fake LowCmd objects and fake transports only. Hardware transport blocking is marker-scoped, so unit and Isaac Lab tests are not affected by a global socket monkeypatch.
+
+The offline LowCmd mapping validator also uses dry-run-only fake commands and the pure-Python safety/mapping core only. It must not be interpreted as permission to enter any real motor command path.
 
 ## Policy Rollout Safety Validation (Isaac Lab only)
 
