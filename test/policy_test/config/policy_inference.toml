@@ -1,0 +1,124 @@
+# policy_inference.toml — sim2real-style RL policy runner for policy_test.
+#
+# Mirrors motion-planner's TOML conventions (one .toml drives one binary,
+# section-per-subsystem, paths absolute). The Python policy reads this,
+# connects to the three UDS sockets opened by policy_control_bridge, and
+# publishes MotorControlFrame at [control].rate_hz.
+
+[paths]
+# Exported policy from rsl_rl. Format is auto-detected by extension:
+#   .onnx -> onnxruntime (sim2real-deployment standard)
+#   .pt   -> torch.jit
+policy = "/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.onnx"
+
+# g0.py is the source of truth for joint names, default pose, PD gains.
+# We import it via importlib (avoiding g0_robot_lab/__init__.py side effects),
+# the same trick codegen_pd_gains.py uses.
+g0_module = "/home/lz/g0_robot_lab/g0_robot_lab/source/g0_robot_lab/g0_robot_lab/assets/robots/g0/g0.py"
+
+[control]
+# Match training: sim.dt = 0.005, decimation = 4 -> 50 Hz policy step.
+rate_hz = 50
+
+# JointPositionActionCfg(scale=0.12, use_default_offset=True, preserve_order=True)
+# joint_target = default + action_scale * raw_action
+action_scale = 0.12
+use_default_offset = true
+
+# Cap raw action magnitude before scaling. -1 disables clipping.
+# Used as a safety guard while bringing the loop up; matches a typical
+# rsl_rl clip_actions=100 default but tighter.
+action_clip = 5.0
+
+# Populate per-slot kp/kd on the DDS wire from g0.py's actuator config
+# (rad -> deg-domain wire units). dq and tau stay at 0 (position-only
+# policy, no feed-forward). Set false to emit kp=kd=0 — Isaac PD still
+# works in sim because plant_state_bridge ignores wire gains under Option A,
+# but a real-hardware firmware needs them.
+emit_pd_gains_on_wire = true
+
+[uds]
+# Server paths opened by policy_control_bridge. The Python policy is a
+# client on each: read-only on the first two, write-only on the third.
+robot_control = "/tmp/g0_sim/robot_control.sock"
+motor_state   = "/tmp/g0_sim/motor_state_to_policy.sock"
+motor_control = "/tmp/g0_sim/motor_control_from_policy.sock"
+
+# Connection retry/backoff for first contact (bridge may launch second).
+connect_timeout_s   = 10.0
+connect_retry_s     = 0.2
+
+[obs.scales]
+# From velocity_env_cfg.py ObservationsCfg.policy:
+#   base_ang_vel  scale = 0.2
+#   joint_vel     scale = 0.05
+# projected_gravity / vel_cmd / joint_pos_rel / last_action / gait_phase use scale = 1.
+base_ang_vel = 0.2
+joint_vel    = 0.05
+
+[obs.history]
+# concatenate_terms=True, history_length=5 -> obs vector = 77 * 5 = 385.
+length = 5
+
+# Whether new frames push old ones out from the front or back.
+# Isaac Lab default is newest-LAST (append). Flip to "front" to validate the
+# alternate convention during the sanity check.
+order = "back"
+
+[obs.gait]
+# gait_phase term: 2-D (sin, cos) of (step_counter * env.step_dt) % period / period.
+# env.step_dt = 1/rate_hz, period_s comes straight from observations.py default.
+period_s = 0.8
+
+[command_mapping]
+# fake_control_agent publishes body.lin_x/lin_y in normalised [-1,+1] and
+# body.ang_z in normalised [-1,+1] (wire field is rad/s but we treat its
+# magnitude as the normalised joystick value, matching motion-planner's
+# fake agent convention).
+#
+# Mapping is asymmetric and must match the training command sampler:
+#   lin_vel_x in (-0.5, 1.0)
+#   lin_vel_y in (-0.3, 0.3)
+#   ang_vel_z in (-0.2, 0.2)
+# Each pair is [neg_limit, pos_limit]; sign-aware clamp/scale on the Python side.
+lin_vel_x = [-0.5, 1.0]
+lin_vel_y = [-0.3, 0.3]
+ang_vel_z = [-0.2, 0.2]
+
+[joint_order]
+# Three reference orderings the policy traffic needs to bridge:
+#   - wire   : motor_id 1..22 (matches joint_mapping.hpp)
+#   - sdk    : G0_JOINT_SDK_NAMES from g0.py (action output)
+#   - urdf   : Isaac Lab articulation order (joint_pos / joint_vel observations)
+#
+# Python builds wire <-> sdk from g0.py + joint_mapping. The urdf order is
+# articulation-traversal-dependent and not derivable without Isaac Lab; we
+# default to alphabetical (Isaac Lab's typical sort) and let Phase 5 verify
+# by zero-command sanity check. Override here if needed.
+urdf_order_strategy = "explicit"  # alphabetical | wire | sdk | explicit
+
+# Captured from isaac_gui_plant.py's `articulation joint_names` print on
+# 2026-05-22. This is the USD/PhysX kinematic-tree traversal order, NOT
+# alphabetical. joint_pos / joint_vel observations come back in this order;
+# the obs builder permutes wire -> urdf using this list.
+# Re-capture and update if the URDF / articulation root ever changes.
+urdf_order_explicit = [
+    "l_hip_pitch_joint",   "r_hip_pitch_joint",   "waist_yaw_joint",
+    "l_hip_roll_joint",    "r_hip_roll_joint",    "waist_roll_joint",
+    "l_hip_yaw_joint",     "r_hip_yaw_joint",
+    "l_shoulder_pitch_joint", "r_shoulder_pitch_joint",
+    "l_knee_pitch_joint",  "r_knee_pitch_joint",
+    "l_shoulder_roll_joint", "r_shoulder_roll_joint",
+    "l_ankle_pitch_joint", "r_ankle_pitch_joint",
+    "l_shoulder_yaw_joint", "r_shoulder_yaw_joint",
+    "l_ankle_roll_joint",  "r_ankle_roll_joint",
+    "l_elbow_pitch_joint", "r_elbow_pitch_joint",
+]
+
+[runtime]
+# --dry-run flag bypasses policy.pt and emits a constant default-pose hold.
+# Useful for end-to-end IO verification before policy weights are loaded.
+dry_run = false
+
+# Log every N policy ticks (50 = once per second at 50 Hz).
+log_every = 50

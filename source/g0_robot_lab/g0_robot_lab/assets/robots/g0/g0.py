@@ -167,12 +167,12 @@ G0_DEFAULT_JOINT_POS = {
     "l_hip_pitch_joint": -0.20,
     "l_hip_roll_joint": 0.0,
     "l_hip_yaw_joint": 0.0,
-    "l_knee_pitch_joint": -0.34,
-    "l_ankle_pitch_joint": 0.14,
+    "l_knee_pitch_joint": 0.34,
+    "l_ankle_pitch_joint": -0.14,
     "l_ankle_roll_joint": 0.0,
 
     # right leg
-    "r_hip_pitch_joint": 0.20,
+    "r_hip_pitch_joint": -0.20,
     "r_hip_roll_joint": 0.0,
     "r_hip_yaw_joint": 0.0,
     "r_knee_pitch_joint": 0.34,
@@ -180,14 +180,14 @@ G0_DEFAULT_JOINT_POS = {
     "r_ankle_roll_joint": 0.0,
 
     # left arm
-    "l_shoulder_pitch_joint": -0.30,
-    "l_shoulder_roll_joint": -0.25,
+    "l_shoulder_pitch_joint": 0.30,
+    "l_shoulder_roll_joint": 0.25,
     "l_shoulder_yaw_joint": 0.0,
-    "l_elbow_pitch_joint": 0.97,
+    "l_elbow_pitch_joint": -0.97,
 
     # right arm
     "r_shoulder_pitch_joint": 0.30,
-    "r_shoulder_roll_joint": 0.25,
+    "r_shoulder_roll_joint": -0.25,
     "r_shoulder_yaw_joint": 0.0,
     "r_elbow_pitch_joint": -0.97,
 }

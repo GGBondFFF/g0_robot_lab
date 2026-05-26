@@ -13,18 +13,21 @@ Frame contract on the UDS:
     pos in deg, dq in deg/s, tau in N*m,
     kp in N*m/deg, kd in N*m/(deg/s)   (firmware PD-gain units).
 
-Control law (mirrors the real motor firmware):
-    tau_out = kp * (pos_cmd - pos_actual) + kd * (dq_cmd - dq_actual) + tau_ff
-where pos_cmd / pos_actual are both in DEGREES (and dq in deg/s). This is
-applied per-joint each sim step via set_joint_effort_target(). The Isaac Lab
-actuator's own PD is disabled (stiffness=0, damping=0) so the only torque on
-each joint comes from the frame's 5 fields. Non-target slots arrive zero
-(kp=kd=tau=0), so those joints feel zero force — combined with
-disable_gravity + fix_root_link, they sit still.
+Control law (option A in the design notes):
+    * Isaac Lab's built-in PD is active using the stiffness/damping from
+      g0.py — this is the authoritative position controller.
+    * The joint position target starts at G0_DEFAULT_JOINT_POS so the robot
+      drives from the URDF zero pose into the standing pose at startup.
+    * Each DDS frame overrides position/velocity targets (deg→rad) per slot
+      and adds frame.tau as feedforward effort. The frame's kp/kd are read
+      for diagnostics but NOT used to update Isaac PD gains in sim — the
+      sender already mirrors g0.py via the codegen, so they should agree.
 
 The robot is spawned floating (disable_gravity=True) and pinned at the root
-(fix_root_link=True) with all joints at 0 rad, so single-joint deltas are
-visually obvious.
+(fix_root_link=True) with all joints at 0 rad. Without DDS traffic, Isaac
+PD pulls every joint into G0_DEFAULT_JOINT_POS. A single-joint sender frame
+(--motor-id N --pos X) overrides slot N's target so joint N moves to X while
+the rest hold the standing pose.
 
 This script must NEVER be wired to real hardware. The DDS topic is
 g0_sim/motor_control_virtual, never mc/motor_control.
@@ -81,7 +84,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "python"))
 import joint_mapping as jm  # noqa: E402
 
-from g0_robot_lab.assets.robots.g0.g0 import G0_CFG  # noqa: E402
+from g0_robot_lab.assets.robots.g0.g0 import G0_CFG, G0_DEFAULT_JOINT_POS  # noqa: E402
 
 
 # ── UDS reader thread ───────────────────────────────────────────────────────
@@ -215,22 +218,17 @@ def build_scene() -> Articulation:
     cfg.spawn.rigid_props.disable_gravity = True
     cfg.spawn.articulation_props.fix_root_link = True
     cfg.init_state.pos = (0.0, 0.0, 0.9)
-    # Override the standing-pose default joint angles with all zeros so that
-    # "pos=0 for non-target slots" coincides with "hold neutral".
+    # Start all joints at zero so the transition into G0_DEFAULT_JOINT_POS
+    # via Isaac PD is visually obvious. The target pose is applied below via
+    # set_joint_position_target after sim.reset().
     cfg.init_state.joint_pos = {".*": 0.0}
     cfg.init_state.joint_vel = {".*": 0.0}
 
-    # Disable Isaac Lab's built-in PD. We mirror the real motor firmware's
-    # control law in the main loop using kp/kd/tau from each DDS frame, so
-    # any built-in PD here would double-count and ignore the frame's gains.
-    #
-    # Effort limit is NOT touched: g0.py reflects the real motor (rated
-    # ~0.5 N*m) and the trained policy was tuned to that envelope. Any
-    # command that asks for more torque than the real motor can deliver
-    # will be PhysX-clipped to ~0.5 N*m, exactly as on hardware.
-    for actuator in cfg.actuators.values():
-        actuator.stiffness = {".*": 0.0}
-        actuator.damping = {".*": 0.0}
+    # Keep Isaac Lab's built-in PD with the stiffness/damping from g0.py.
+    # That is the authoritative position controller; the main loop only
+    # overrides position/velocity targets and adds frame.tau as feedforward.
+    # Effort limit is not touched: g0.py reflects the real motor (rated
+    # ~0.5 N*m) and the trained policy was tuned to that envelope.
 
     sim_utils.GroundPlaneCfg().func("/World/groundPlane", sim_utils.GroundPlaneCfg())
     sim_utils.DomeLightCfg(intensity=2000.0, color=(0.85, 0.85, 0.95)).func(
@@ -258,9 +256,9 @@ def main():
     slot_to_jidx = [motor_id_to_jidx[mid] for mid in range(1, 23)]
     print(f"[receiver] mapping OK. slot_to_jidx = {slot_to_jidx}")
 
-    # Diagnostic: confirm Isaac Lab's built-in PD was actually zeroed. If
-    # max stiffness/damping > 0 here, the PhysX drive is still pulling each
-    # joint toward target=0, masking the frame's tau/kp/kd commands.
+    # Diagnostic: confirm Isaac PD picked up g0.py's stiffness/damping. With
+    # option-A control (Isaac PD authoritative), these MUST be non-zero or
+    # the robot will not hold its pose.
     for name, act in robot.actuators.items():
         kp_max = float(act.stiffness.max().item())
         kd_max = float(act.damping.max().item())
@@ -274,17 +272,31 @@ def main():
     n_joints = len(robot.joint_names)
     device = sim.device
 
-    # Per-joint command tensors in WIRE units (degrees, deg/s, N*m, gains).
-    # Default zero == "no force" -> joint stays put under no gravity.
-    pos_cmd_deg = torch.zeros(n_joints, device=device)
-    dq_cmd_dps  = torch.zeros(n_joints, device=device)
-    kp_cmd      = torch.zeros(n_joints, device=device)
-    kd_cmd      = torch.zeros(n_joints, device=device)
-    tau_ff      = torch.zeros(n_joints, device=device)
+    # Per-joint command tensors in ISAAC units (radians, rad/s, N*m).
+    # Initial position target = G0_DEFAULT_JOINT_POS, mapped from joint name
+    # to articulation index. This is what Isaac PD pulls toward when no DDS
+    # frame has arrived yet (so the robot transitions from the URDF zero
+    # pose into the standing pose at startup).
+    pos_target_rad = torch.zeros((1, n_joints), device=device)
+    for jname, jpos in G0_DEFAULT_JOINT_POS.items():
+        if jname in robot.joint_names:
+            pos_target_rad[0, robot.joint_names.index(jname)] = float(jpos)
+        else:
+            print(f"[receiver] WARN: G0_DEFAULT_JOINT_POS has '{jname}' but the "
+                  f"articulation does not.")
+    dq_target_rps = torch.zeros((1, n_joints), device=device)
+    tau_ff        = torch.zeros((1, n_joints), device=device)
+
     # slot_to_jidx reorder, as a tensor for index_copy_.
     reorder_idx = torch.tensor(slot_to_jidx, device=device, dtype=torch.long)
+    deg_to_rad = math.pi / 180.0
 
-    efforts = torch.zeros((1, n_joints), device=device)
+    # Push the initial standing-pose target so the very first sim step sees
+    # Isaac PD already pulling toward the default pose.
+    robot.set_joint_position_target(pos_target_rad)
+    robot.set_joint_velocity_target(dq_target_rps)
+    robot.set_joint_effort_target(tau_ff)
+
     last_seq = None
     applied = 0
     last_log_t = time.time()
@@ -295,12 +307,13 @@ def main():
             if latest is not None and latest[0] != last_seq:
                 seq, ts_ns, pos_s, dq_s, kp_s, kd_s, tau_s = latest
                 last_seq = seq
-                slot_tensor = lambda lst: torch.tensor(lst, device=device, dtype=torch.float32)
-                pos_cmd_deg.index_copy_(0, reorder_idx, slot_tensor(pos_s))
-                dq_cmd_dps .index_copy_(0, reorder_idx, slot_tensor(dq_s))
-                kp_cmd     .index_copy_(0, reorder_idx, slot_tensor(kp_s))
-                kd_cmd     .index_copy_(0, reorder_idx, slot_tensor(kd_s))
-                tau_ff     .index_copy_(0, reorder_idx, slot_tensor(tau_s))
+                # Wire is in deg / deg/s / N*m; Isaac targets want rad / rad/s.
+                pos_wire = torch.tensor(pos_s, device=device, dtype=torch.float32) * deg_to_rad
+                dq_wire  = torch.tensor(dq_s,  device=device, dtype=torch.float32) * deg_to_rad
+                tau_wire = torch.tensor(tau_s, device=device, dtype=torch.float32)
+                pos_target_rad[0].index_copy_(0, reorder_idx, pos_wire)
+                dq_target_rps[0] .index_copy_(0, reorder_idx, dq_wire)
+                tau_ff[0]        .index_copy_(0, reorder_idx, tau_wire)
                 applied += 1
                 if applied % args_cli.log_every == 1:
                     nz = [(slot + 1, jm.motor_id_to_joint_name(slot + 1),
@@ -317,22 +330,12 @@ def main():
                     print(f"[receiver] applied={applied} seq={seq} rate~{rate:.1f}Hz "
                           f"nonzero={nz}")
 
-            # Real-motor PD law, in DEGREES (matches the firmware convention):
-            #   tau_out = kp * (pos_cmd - pos_actual) + kd * (dq_cmd - dq_actual) + tau_ff
-            # The DDS wire is in degrees, the user's kp/kd are calibrated to
-            # deg-error -> torque, so we compute the error in degrees too.
-            pos_actual_deg = robot.data.joint_pos[0] * (180.0 / math.pi)
-            dq_actual_dps  = robot.data.joint_vel[0] * (180.0 / math.pi)
-            tau_pd = kp_cmd * (pos_cmd_deg - pos_actual_deg) \
-                   + kd_cmd * (dq_cmd_dps  - dq_actual_dps) \
-                   + tau_ff
-            efforts[0] = tau_pd
-            # ImplicitActuator.compute() is a no-op for effort; it forwards
-            # to set_dof_actuation_forces() in write_data_to_sim(), which
-            # pushes our torque directly to PhysX each step. The PhysX joint
-            # drive's PD also runs in parallel, but with stiffness=damping=0
-            # (set in build_scene) that drive contributes zero force.
-            robot.set_joint_effort_target(efforts)
+            # Isaac PD (with g0.py stiffness/damping) does the position
+            # control internally based on these targets. tau_ff is added on
+            # top via the actuator effort path each step.
+            robot.set_joint_position_target(pos_target_rad)
+            robot.set_joint_velocity_target(dq_target_rps)
+            robot.set_joint_effort_target(tau_ff)
             robot.write_data_to_sim()
             sim.step()
             robot.update(args_cli.sim_dt)

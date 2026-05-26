@@ -1,8 +1,26 @@
 // Virtual single-joint DDS sender for the Isaac Lab test.
 //
 // Fills a full 22-slot MotorControl::Control frame matching motion-planner's
-// wire format (5 fields per motor: pos, dq, kp, kd, tau). Only the target
-// motor slot carries a non-zero command; the other 21 slots are zeroed.
+// wire format (5 fields per motor: pos, dq, kp, kd, tau).
+//
+// Motion-planner DDS alignment (see /home/lz/ws/motion-planner/src/
+// dds_client.cpp and src/robot/dds_executor.cpp):
+//   * Topic type string : "mbus::MotorControl_Control"        — identical.
+//   * DDS domain id     : 0                                   — identical.
+//   * Frame layout      : timestamp_ns:u64 sequence_id:u16
+//                         motor_count:u32 motors[22] of
+//                         (pos,dq,kp,kd,tau):f32              — identical.
+//   * Wire units        : deg, deg/s, N*m, N*m/deg,
+//                         N*m/(deg/s)                         — identical.
+//   * timestamp_ns clock: std::chrono::system_clock (Unix epoch ns)
+//                                                             — identical.
+//   * Topic name        : "g0_sim/motor_control_virtual" — INTENTIONALLY
+//                         different from real-HW "mc/motor_control" so this
+//                         test cannot drive real hardware.
+//   * Default frame     : use --baseline default for motion-planner-style
+//                         "every slot populated with default pos + g0.py PD"
+//                         frames; --baseline zero keeps the legacy all-zero
+//                         non-target-slot behaviour.
 //
 // Wire units (matches the real motor and motion-planner's dds_executor):
 //   pos:  degrees
@@ -46,6 +64,7 @@
 
 #include "joint_mapping.hpp"
 #include "mbus_sim_client.hpp"
+#include "pd_gains_generated.hpp"
 
 #include <idl_motor_control.hpp>
 
@@ -75,6 +94,17 @@ struct Args {
     double tau_nm  = 0.0;
     double kp = 0.0;
     double kd = 0.0;
+    bool kp_given = false, kd_given = false;
+    // When true, kp/kd default to the per-motor table generated from g0.py.
+    // Explicit --kp / --kd still take priority. Implied when --baseline default.
+    bool use_cfg_gains = false;
+    // Baseline content for non-target slots in the 22-slot frame.
+    //   "zero"    : non-target slots are all-zero (legacy)
+    //   "default" : non-target slots = (default standing pose, g0.py PD gains,
+    //               dq=tau=0). Matches the way motion-planner publishes when
+    //               the planner has nothing perturbing those joints, and
+    //               works with the Isaac receiver running g0.py PD.
+    std::string baseline = "default";
     // Shortcut: --mode <pos|dq|tau> --value <float>
     std::string mode;
     bool mode_given = false;
@@ -85,6 +115,7 @@ struct Args {
     double rate_hz = 50.0;
     double duration_sec = 0.0;  // 0 = run until Ctrl-C
     bool dry_run = false;
+    bool allow_real_hw = false;
     std::string topic = kDefaultTopic;
     int full_print_every = 0;   // 0 = first frame only
 };
@@ -100,6 +131,16 @@ void usage(const char* argv0) {
         "  --tau <N*m>                 Feed-forward torque (default 0)\n"
         "  --kp  <N*m/deg>             Position gain      (default 0)\n"
         "  --kd  <N*m/(deg/s)>         Velocity gain      (default 0)\n"
+        "  --use-cfg-gains {true|false}  Default false. If true, kp/kd default\n"
+        "                                to the per-motor table generated from\n"
+        "                                g0.py (pd_gains_generated.hpp).\n"
+        "                                Explicit --kp / --kd still win.\n"
+        "                                Implied when --baseline default.\n"
+        "  --baseline {default|zero}     Default 'default'.\n"
+        "                                 default: all 22 slots prefilled with\n"
+        "                                   G0_DEFAULT_JOINT_POS + g0.py PD,\n"
+        "                                   target slot overridden by user CLI.\n"
+        "                                 zero: legacy, non-target slots all 0.\n"
         "Shortcut (mutually exclusive with the explicit field flag):\n"
         "  --mode {pos|dq|tau}         Which field to populate (with --value)\n"
         "  --value <float>             Value for the field named by --mode\n"
@@ -133,13 +174,16 @@ bool parse_args(int argc, char** argv, Args& a) {
         else if (k == "--pos")             { auto v = need("--pos");             if (!v) return false; a.pos_deg = std::atof(v); a.pos_given = true; }
         else if (k == "--dq")              { auto v = need("--dq");              if (!v) return false; a.dq_dps  = std::atof(v); a.dq_given  = true; }
         else if (k == "--tau")             { auto v = need("--tau");             if (!v) return false; a.tau_nm  = std::atof(v); a.tau_given = true; }
-        else if (k == "--kp")              { auto v = need("--kp");              if (!v) return false; a.kp = std::atof(v); }
-        else if (k == "--kd")              { auto v = need("--kd");              if (!v) return false; a.kd = std::atof(v); }
+        else if (k == "--kp")              { auto v = need("--kp");              if (!v) return false; a.kp = std::atof(v); a.kp_given = true; }
+        else if (k == "--kd")              { auto v = need("--kd");              if (!v) return false; a.kd = std::atof(v); a.kd_given = true; }
+        else if (k == "--use-cfg-gains")   { auto v = need("--use-cfg-gains");   if (!v) return false; if (!parse_bool(v, a.use_cfg_gains)) { std::fprintf(stderr, "bad --use-cfg-gains\n"); return false; } }
+        else if (k == "--baseline")        { auto v = need("--baseline");        if (!v) return false; a.baseline = v; if (a.baseline != "default" && a.baseline != "zero") { std::fprintf(stderr, "bad --baseline (must be default|zero): %s\n", v); return false; } }
         else if (k == "--mode")            { auto v = need("--mode");            if (!v) return false; a.mode = v; a.mode_given = true; }
         else if (k == "--value")           { auto v = need("--value");           if (!v) return false; a.value = std::atof(v); a.value_given = true; }
         else if (k == "--rate-hz")         { auto v = need("--rate-hz");         if (!v) return false; a.rate_hz = std::atof(v); }
         else if (k == "--duration-sec")    { auto v = need("--duration-sec");    if (!v) return false; a.duration_sec = std::atof(v); }
         else if (k == "--dry-run")         { auto v = need("--dry-run");         if (!v) return false; if (!parse_bool(v, a.dry_run)) { std::fprintf(stderr, "bad --dry-run\n"); return false; } }
+        else if (k == "--allow-real-hw")   { a.allow_real_hw = true; }
         else if (k == "--topic")           { auto v = need("--topic");           if (!v) return false; a.topic = v; }
         else if (k == "--full-print-every"){ auto v = need("--full-print-every");if (!v) return false; a.full_print_every = std::atoi(v); }
         else { std::fprintf(stderr, "unknown arg: %s\n", k.c_str()); return false; }
@@ -191,19 +235,46 @@ void zero_motor(MotorControl::MotorCmd& m) {
     m.pos(0.0f); m.dq(0.0f); m.kp(0.0f); m.kd(0.0f); m.tau(0.0f);
 }
 
+// Per-slot baseline used when --baseline default. The default pos is already
+// in URDF/sim convention (g0.py's G0_DEFAULT_JOINT_POS is URDF), so it is
+// written to the wire as-is — sim_sign is NOT applied. The receiver reads
+// frame.pos as degrees in URDF convention and uses it as the joint position
+// target for Isaac PD.
+void fill_default_slot(MotorControl::MotorCmd& m, int motor_id) {
+    const std::size_t idx = static_cast<std::size_t>(motor_id - 1);
+    m.pos(g0_sjt::kDefaultPosByMotorIdDeg[idx]);
+    m.dq(0.0f);
+    m.kp(g0_sjt::kPdGainsByMotorId[idx].kp);
+    m.kd(g0_sjt::kPdGainsByMotorId[idx].kd);
+    m.tau(0.0f);
+}
+
 void write_motor(MotorControl::MotorCmd& m, const WireCmd& w) {
     m.pos(w.pos_deg); m.dq(w.dq_dps); m.kp(w.kp); m.kd(w.kd); m.tau(w.tau_nm);
 }
 
 void build_frame(MotorControl::Control& ctrl, const Args& a, uint16_t seq) {
+    // Use system_clock (Unix epoch ns) to match motion-planner's dds_executor
+    // — anything that compares timestamps across the bridge / executor /
+    // receiver should agree on what 0 means.
     auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+        std::chrono::system_clock::now().time_since_epoch()).count();
     ctrl.timestamp_ns(static_cast<uint64_t>(now_ns));
     ctrl.sequence_id(seq);
     ctrl.motor_count(g0_sjt::kNumMotors);
 
     auto& motors = ctrl.motors();
-    for (auto& m : motors) zero_motor(m);
+    if (a.baseline == "default") {
+        for (int mid = 1; mid <= g0_sjt::kNumMotors; ++mid) {
+            fill_default_slot(motors[static_cast<std::size_t>(mid - 1)], mid);
+        }
+    } else {
+        for (auto& m : motors) zero_motor(m);
+    }
+    // Target slot: always overwritten by the user's CLI values (with sim_sign
+    // applied to pos/dq/tau). kp/kd inherit from whatever the baseline put
+    // there unless the user supplied --kp / --kd; that override happens
+    // earlier in main() so a.kp / a.kd already hold the final values.
     write_motor(motors[a.motor_id - 1], to_wire(a.motor_id, a));
 }
 
@@ -250,19 +321,58 @@ int main(int argc, char** argv) {
     Args a;
     if (!parse_args(argc, argv, a)) { usage(argv[0]); return 2; }
 
-    if (a.topic.rfind("mc/", 0) == 0) {
+    // --baseline default implies --use-cfg-gains: the baseline already puts
+    // g0.py PD on every slot, and the target slot should match unless the
+    // user overrides --kp / --kd explicitly.
+    const bool effective_use_cfg_gains = a.use_cfg_gains || (a.baseline == "default");
+
+    if (effective_use_cfg_gains) {
+        const auto& g = g0_sjt::kPdGainsByMotorId[static_cast<std::size_t>(a.motor_id - 1)];
+        if (!a.kp_given) {
+            a.kp = static_cast<double>(g.kp);
+            std::printf("[sender] kp=%.6f from g0.py (baseline=%s use-cfg-gains=%s)\n",
+                        a.kp, a.baseline.c_str(), a.use_cfg_gains ? "true" : "false");
+        }
+        if (!a.kd_given) {
+            a.kd = static_cast<double>(g.kd);
+            std::printf("[sender] kd=%.6f from g0.py (baseline=%s use-cfg-gains=%s)\n",
+                        a.kd, a.baseline.c_str(), a.use_cfg_gains ? "true" : "false");
+        }
+    }
+
+    // When baseline=default and the user didn't provide --pos, target slot
+    // should hold its default standing-pose position (i.e. the sender does
+    // not perturb that joint). Default pos is URDF convention, so divide by
+    // sim_sign to convert into the RHR-style CLI value `a.pos_deg` (which
+    // build_frame's to_wire() will multiply back).
+    if (a.baseline == "default" && !a.pos_given) {
+        const int s = g0_sjt::sim_sign_for_motor(a.motor_id);
+        const float pos_wire = g0_sjt::kDefaultPosByMotorIdDeg[
+            static_cast<std::size_t>(a.motor_id - 1)];
+        a.pos_deg = static_cast<double>(pos_wire) / static_cast<double>(s);
+        std::printf("[sender] pos=%.4f deg from G0_DEFAULT_JOINT_POS (baseline=default)\n",
+                    a.pos_deg);
+    }
+
+    if (a.topic.rfind("mc/", 0) == 0 && !a.allow_real_hw) {
         std::fprintf(stderr,
             "ERROR: topic '%s' looks like a real-hardware topic (mc/...).\n"
-            "       This test must use a virtual topic (default %s).\n",
-            a.topic.c_str(), kDefaultTopic);
+            "       Pass --allow-real-hw to opt in.\n",
+            a.topic.c_str());
         return 4;
     }
-    if (!a.dry_run && a.topic.rfind("g0_sim/", 0) != 0) {
+    if (!a.dry_run && !a.allow_real_hw && a.topic.rfind("g0_sim/", 0) != 0) {
         std::fprintf(stderr,
-            "ERROR: --dry-run false requires the topic to start with 'g0_sim/'.\n"
+            "ERROR: --dry-run false requires the topic to start with 'g0_sim/'\n"
+            "       (or pass --allow-real-hw for an mc/ topic).\n"
             "       Got: '%s'. Default is %s.\n",
             a.topic.c_str(), kDefaultTopic);
         return 4;
+    }
+    if (a.allow_real_hw) {
+        std::fprintf(stderr,
+            "[sender] *** --allow-real-hw set: this command WILL drive the real robot ***\n");
+        g0_sjt::set_allow_real_hw_topics(true);
     }
 
     std::signal(SIGINT, on_signal);

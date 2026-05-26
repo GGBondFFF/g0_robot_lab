@@ -1,0 +1,67 @@
+# policy_inference_real_hw.toml — REAL HARDWARE configuration.
+#
+# Differs from policy_inference.toml only in [uds] paths (same defaults; the
+# bridge process is now talking to mc/* topics — see scripts in
+# docs/REAL_HW_DEPLOYMENT.md). Everything else (policy, obs scales, command
+# mapping, joint order) is identical to sim so the policy sees the same
+# observations it was trained on.
+#
+# DO NOT load this from policy_inference.py by accident. Pass it explicitly:
+#   python policy_inference.py --config ../config/policy_inference_real_hw.toml
+
+[paths]
+policy = "/home/lz/g0_robot_lab/g0_robot_lab/logs/rsl_rl/g0_velocity/2026-05-14_18-29-19/exported/policy.onnx"
+g0_module = "/home/lz/g0_robot_lab/g0_robot_lab/source/g0_robot_lab/g0_robot_lab/assets/robots/g0/g0.py"
+
+[control]
+rate_hz = 50
+action_scale = 0.12
+use_default_offset = true
+# Tighter clip during real-HW bring-up. Loosen once Phase D acceptance passes.
+action_clip = 3.0
+# REAL HARDWARE: kp/kd MUST be populated. Firmware PD reads these per packet.
+emit_pd_gains_on_wire = true
+
+[uds]
+# Bridge UDS paths can stay identical to sim — the bridge process itself
+# decides which DDS topic it subscribes / publishes via its CLI flags.
+robot_control = "/tmp/g0_sim/robot_control.sock"
+motor_state   = "/tmp/g0_sim/motor_state_to_policy.sock"
+motor_control = "/tmp/g0_sim/motor_control_from_policy.sock"
+connect_timeout_s = 10.0
+connect_retry_s   = 0.2
+
+[obs.scales]
+base_ang_vel = 0.2
+joint_vel    = 0.05
+
+[obs.history]
+length = 5
+order = "back"
+
+[obs.gait]
+period_s = 0.8
+
+[command_mapping]
+lin_vel_x = [-0.5, 1.0]
+lin_vel_y = [-0.3, 0.3]
+ang_vel_z = [-0.2, 0.2]
+
+[joint_order]
+urdf_order_strategy = "explicit"
+urdf_order_explicit = [
+    "l_hip_pitch_joint",   "r_hip_pitch_joint",   "waist_yaw_joint",
+    "l_hip_roll_joint",    "r_hip_roll_joint",    "waist_roll_joint",
+    "l_hip_yaw_joint",     "r_hip_yaw_joint",
+    "l_shoulder_pitch_joint", "r_shoulder_pitch_joint",
+    "l_knee_pitch_joint",  "r_knee_pitch_joint",
+    "l_shoulder_roll_joint", "r_shoulder_roll_joint",
+    "l_ankle_pitch_joint", "r_ankle_pitch_joint",
+    "l_shoulder_yaw_joint", "r_shoulder_yaw_joint",
+    "l_ankle_roll_joint",  "r_ankle_roll_joint",
+    "l_elbow_pitch_joint", "r_elbow_pitch_joint",
+]
+
+[runtime]
+dry_run = false
+log_every = 50

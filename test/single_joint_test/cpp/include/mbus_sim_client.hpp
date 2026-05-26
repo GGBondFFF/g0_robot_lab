@@ -16,11 +16,18 @@
 
 namespace g0_sjt {
 
+// Opt-in flag to allow mc/ (real-hardware) topics in the publisher /
+// subscriber wrappers below. The single_joint_sender CLI sets this via
+// --allow-real-hw after printing a loud warning.
+inline bool& _allow_real_hw_flag() { static bool f = false; return f; }
+inline void set_allow_real_hw_topics(bool allow) { _allow_real_hw_flag() = allow; }
+
 class MbusSimPublisher {
 public:
     explicit MbusSimPublisher(const std::string& topic_name) {
-        if (topic_name.rfind("mc/", 0) == 0) {
-            throw std::runtime_error("refusing real-hardware topic prefix mc/: " + topic_name);
+        if (topic_name.rfind("mc/", 0) == 0 && !_allow_real_hw_flag()) {
+            throw std::runtime_error("refusing real-hardware topic prefix mc/ "
+                                     "(pass --allow-real-hw to override): " + topic_name);
         }
         const mbus::TopicConfig cfg{topic_name, "mbus::MotorControl_Control",
                                     mbus::TopicRule::Pub};
@@ -40,8 +47,9 @@ private:
 class MbusSimSubscriber {
 public:
     explicit MbusSimSubscriber(const std::string& topic_name) {
-        if (topic_name.rfind("mc/", 0) == 0) {
-            throw std::runtime_error("refusing real-hardware topic prefix mc/: " + topic_name);
+        if (topic_name.rfind("mc/", 0) == 0 && !_allow_real_hw_flag()) {
+            throw std::runtime_error("refusing real-hardware topic prefix mc/ "
+                                     "(pass --allow-real-hw to override): " + topic_name);
         }
         const mbus::TopicConfig cfg{topic_name, "mbus::MotorControl_Control",
                                     mbus::TopicRule::Sub};

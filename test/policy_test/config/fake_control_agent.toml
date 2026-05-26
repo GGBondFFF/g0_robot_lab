@@ -1,0 +1,52 @@
+# fake_control_agent.toml — virtual policy_test stack
+#
+# Publishes a steady RobotControl::Control on g0_sim/robot_control. The
+# policy_control_bridge subscribes and forwards to the Python policy over
+# UDS. The Python side maps body.{lin_x,lin_y,ang_z} into the 3-D velocity
+# command read by the trained policy (g0_velocity 2026-05-14_18-29-19).
+#
+# Convention follows motion-planner's fake_control_agent:
+#   - vx / vy / vz   are normalised in [-1, +1]; Python maps to training
+#                    limit_ranges asymmetrically:
+#                        lin_vel_x ∈ (-0.5, 1.0)
+#                        lin_vel_y ∈ (-0.3, 0.3)
+#                        ang_vel_z ∈ (-0.2, 0.2)
+#   - roll / pitch / yaw are degrees and are wire-converted to radians on
+#     the C++ side (motion-planner parity).
+#   - yaw_rate is deg/s, wire-converted to rad/s on the C++ side.
+
+[publish]
+rate_hz    = 50    # match training control rate (sim.dt=0.005 * decimation=4)
+loop_count = -1    # -1 = infinite
+
+[body]
+# Walk-in-place baseline (all zeros). Edit before the sanity check.
+vx = 0.0
+vy = 0.0
+vz = 0.0
+
+roll  = 0.0
+pitch = 0.0
+yaw   = 0.0
+
+yaw_rate = 5.0
+
+[left_gripper]
+enabled = false
+opening = 0.0
+vx = 0.0
+vy = 0.0
+vz = 0.0
+roll  = 0.0
+pitch = 0.0
+yaw   = 0.0
+
+[right_gripper]
+enabled = false
+opening = 0.0
+vx = 0.0
+vy = 0.0
+vz = 0.0
+roll  = 0.0
+pitch = 0.0
+yaw   = 0.0
