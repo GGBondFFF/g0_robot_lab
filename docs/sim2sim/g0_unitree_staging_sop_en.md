@@ -118,6 +118,46 @@ effectively target **L4 (visual demo)** only; G0's CI is **stricter**.
 | **L3 Without band** | After key `9`, RLBase ≥ 30 s, `root_z > 0.15` | `tests/deployment/test_g0_deploy_rlbase_30s_no_band.py` |
 | **L4 Visual** | Locomotion comparable to Unitree demo gifs | manual GUI + cmd modes |
 
+### Per-level verification commands
+
+Run from the repo root in the `g0_mujoco` conda env.
+
+```bash
+# L1 — process (MUST pass, no xfail): band keys, ground gate, transitions
+pytest tests/unit/test_elastic_band_unitree_keys.py \
+       tests/unit/test_remote_controller_band_keys.py \
+       tests/unit/test_main_band_wiring.py \
+       tests/unit/test_gui_runner_band_adapter.py \
+       tests/deployment/test_g0_staging_fsm_gate.py \
+       tests/deployment/test_g0_staging_sop.py::test_staging_sop_process -v
+
+# L2 — with band (RLBase + band >=30s, no NaN, band force > 0)
+pytest tests/deployment/test_g0_deploy_soak.py -v
+
+# L3 — without band (RLBase >=30s, root_z > 0.15). xfail on the v0 policy
+#      until Phase 5 / Task 10 fixes standing.
+pytest tests/deployment/test_g0_staging_sop.py::test_staging_sop_rlbase_30s_no_band -v
+pytest tests/deployment/test_g0_deploy_rlbase_30s_no_band.py -v   # Task 10
+```
+
+### L4 manual GUI checklist
+
+Requires a local display (X/Wayland). Launch with the staging profile:
+
+```bash
+python -m deploy.robots.g0.main \
+  --config deploy/robots/g0/config/policy/velocity/v0/deploy_staging.yaml \
+  --duration 120 --realtime
+```
+
+- [ ] FixStand: press `f`; robot ramps to the stand pose, band visibly holds it.
+- [ ] Lower: press `8` several times; base descends toward the ground (watch `base_z`).
+- [ ] Lift: press `7`; base rises (band tightens) — confirms 7/8 direction.
+- [ ] Confirm ground: press `g`; console prints `feet_on_ground=True`.
+- [ ] Gate: press `r` BEFORE `g` → rejected; after `g` → enters RLBase.
+- [ ] Disable band: press `9`; console prints `enabled=False`.
+- [ ] Commands: `w/s/a/d/q/e` produce reasonable locomotion response (vs Unitree demo).
+
 ### Known v0 policy limitation
 
 The current v0 checkpoint (`logs/rsl_rl/g0_velocity/2026-05-26_18-36-57`) does

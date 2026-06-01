@@ -520,9 +520,9 @@ pytest tests/deployment/test_g0_staging_sop.py tests/unit/test_elastic_band_unit
 - Modify: `docs/sim2sim/g0_unitree_staging_sop_en.md`
 - Modify: `deploy/README.md`
 
-- [ ] **Step 1:** Table L1–L4 (see “Acceptance Levels” above)
-- [ ] **Step 2:** Map each level to pytest files and manual GUI checklist
-- [ ] **Step 3:** Commit
+- [x] **Step 1:** Table L1–L4 (see “Acceptance Levels” above)
+- [x] **Step 2:** Map each level to pytest files and manual GUI checklist
+- [x] **Step 3:** Commit
 
 ---
 

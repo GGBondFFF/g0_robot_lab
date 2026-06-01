@@ -83,6 +83,17 @@ Production `deploy.yaml` is unchanged (band off, no staging keys).
 Full operator SOP and the L1–L4 acceptance levels:
 [`docs/sim2sim/g0_unitree_staging_sop_en.md`](../docs/sim2sim/g0_unitree_staging_sop_en.md).
 
+### Acceptance levels (sim2sim)
+
+| Level | Criterion | Test |
+|-------|-----------|------|
+| L1 Process | band keys + ground gate + transitions | `test_g0_staging_sop.py::test_staging_sop_process`, `test_g0_staging_fsm_gate.py` (+ unit tests) |
+| L2 With band | RLBase + band ≥30s, no NaN, band force > 0 | `test_g0_deploy_soak.py` |
+| L3 Without band | after key `9`, RLBase ≥30s, `root_z > 0.15` | `test_g0_staging_sop.py::test_staging_sop_rlbase_30s_no_band`, `test_g0_deploy_rlbase_30s_no_band.py` (xfail on v0 policy) |
+| L4 Visual | locomotion vs Unitree demo | manual GUI (see SOP doc checklist) |
+
+L3 is the M2 sign-off gate and is currently `xfail` (v0 policy fall, Phase 5 / Task 10).
+
 ## What this does NOT do
 
 - Train. Use `scripts/sim2sim/g0_train_dr_dryrun.py` and IsaacLab for that.
