@@ -20,7 +20,7 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from g0_robot_lab.tasks.locomotion import mdp
 
 # import isaaclab_tasks.manager_based.locomotion.velocity.mdp as velocity_mdp
@@ -42,26 +42,25 @@ G0_FOOT_BODY_NAMES = [
 
 ##
 # Terrain config
+#
+# Unitree G1 uses 9x21 tiles with use_terrain_origins=True (default): envs share tile
+# centers for GPU-parallel training. For grid-spaced robots, set use_terrain_origins=False
+# below and size the tile grid to cover num_envs * env_spacing (~160 m for 4096 @ 2.5 m).
 ##
 G0_FLAT_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
-    size=(8.0,8.0),
+    size=(8.0, 8.0),
     border_width=20.0,
-    num_rows=9,
-    num_cols=21,
+    num_rows=22,
+    num_cols=22,
     horizontal_scale=0.1,
     vertical_scale=0.005,
     slope_threshold=0.75,
-    # initial set difficulty range, it will be changed later
-    difficulty_range=(0.0,1.0),
+    difficulty_range=(0.0, 1.0),
     use_cache=False,
     sub_terrains={
         "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.5),
     },
 )
-
-##
-# Terrain config
-##
 
 @configclass
 class G0RobotLabSceneCfg(InteractiveSceneCfg):
@@ -70,17 +69,21 @@ class G0RobotLabSceneCfg(InteractiveSceneCfg):
     # ground terrain
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        # terrain_type="generator",  # "plane", "generator"
-        # terrain_generator=G0_FLAT_TERRAIN_CFG, # None, ROUGH_TERRAINS_CFG
-        # max_init_terrain_level=G0_FLAT_TERRAIN_CFG.num_rows - 1,
-        terrain_type = "plane",
-        terrain_generator = None,
+        terrain_type="generator",  # "plane", "generator"
+        terrain_generator=G0_FLAT_TERRAIN_CFG,
+        max_init_terrain_level=G0_FLAT_TERRAIN_CFG.num_rows - 1,
+        use_terrain_origins=False,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
             dynamic_friction=1.0,
+        ),
+        visual_material=sim_utils.MdlFileCfg(
+            mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+            project_uvw=True,
+            texture_scale=(0.25, 0.25),
         ),
         debug_vis=False,
     )
@@ -132,14 +135,16 @@ class EventCfg:
             # "num_buckets": 32,
         },
     )
-    # Keep base mass randomization disable at beginning.
-    # Enable it after robot can stand and walk on flat ground.
+    # P4 (sim2sim-aligned, was (-0.2, 0.5)): widen to match Unitree G1 scale
+    # (G1 uses -1.0..+3.0 on torso ~6 kg → ~17%..50% torso mass band; here on
+    # G0 torso ~0.5 kg → -60%..+200%, but this is fine since G0 only has 1.4 kg
+    # total — we want the policy robust to substantial CoM/mass shifts).
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "mass_distribution_params": (-0.2, 0.5),
+            "mass_distribution_params": (-0.3, 1.0),
             "operation": "add",
         },
     )
@@ -160,11 +165,11 @@ class EventCfg:
         mode="reset",
         params={
             "pose_range": {
-                "x": (-0.2, 0.2),
-                "y": (-0.2, 0.2),
-                # same as code_base, maybe too large, it will be changed later
-                # "yaw": (-3.14, 3.14)
-                "yaw":(-0.2,0.2)
+                "x": (-0.5, 0.5),
+                "y": (-0.5, 0.5),
+                # P4 (sim2sim-aligned, was (-0.2, 0.2)): full Unitree range so
+                # the policy sees arbitrary yaw at episode start.
+                "yaw": (-3.14, 3.14),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
@@ -182,7 +187,7 @@ class EventCfg:
         mode="reset",
         params={
             "position_range": (1.0, 1.0),
-            "velocity_range": (-0.2, 0.2),
+            "velocity_range": (-0.5, 0.5),
         },
     )
 
@@ -455,10 +460,10 @@ class TerminationsCfg:
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
+    # Rough-terrain curriculum (Unitree default). Requires use_terrain_origins=True on scene.terrain.
     # terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
     ang_vel_cmd_levels = CurrTerm(mdp.ang_vel_cmd_levels)
-    # pass
 ##
 # Environment configuration
 ##

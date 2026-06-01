@@ -976,17 +976,17 @@
     name="r_hip_pitch_link">
     <inertial>
       <origin
-        xyz="0 0 0"
+        xyz="-4.5873e-05 -0.019326 -0.0037613"
         rpy="0 0 0" />
       <mass
-        value="0" />
+        value="0.043836" />
       <inertia
-        ixx="0"
-        ixy="0"
-        ixz="0"
-        iyy="0"
-        iyz="0"
-        izz="0" />
+        ixx="8.0338e-06"
+        ixy="2.9987e-10"
+        ixz="1.563e-08"
+        iyy="5.9914e-06"
+        iyz="6.8052e-08"
+        izz="5.7892e-06" />
     </inertial>
     <visual>
       <origin
@@ -1321,3 +1321,4 @@
       velocity="99" />
   </joint>
 </robot>
+

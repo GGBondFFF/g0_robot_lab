@@ -10,7 +10,7 @@ from . import g0_actuators
 
 
 _G0_DIR = Path(__file__).resolve().parent
-_G0_USD_PATH = _G0_DIR / "usd" / "g0.usd"
+_G0_URDF_PATH = _G0_DIR / "urdf" / "g0.urdf"
 
 
 @configclass
@@ -198,8 +198,18 @@ G0_DEFAULT_JOINT_POS = {
 # -------------------------------------------------------------------------------
 
 G0_CFG = G0ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=str(_G0_USD_PATH),
+    spawn=sim_utils.UrdfFileCfg(
+        asset_path=str(_G0_URDF_PATH),
+        fix_base=False,
+        merge_fixed_joints=False,
+        root_link_name="base_link",
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
+                stiffness=0.0,
+                damping=0.0,
+            ),
+            target_type="position",
+        ),
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             # Formal locomotion must use real gravity.
