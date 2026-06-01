@@ -197,7 +197,7 @@ git commit -m "feat(deploy): add Unitree-aligned staging deploy profile"
 - Create: `tests/unit/test_elastic_band_unitree_keys.py`
 - Modify: `deploy/common/elastic_band.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/unit/test_elastic_band_unitree_keys.py
@@ -247,12 +247,12 @@ def test_toggle_enabled():
     assert band.enabled is True
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /home/lz/g0_robot_lab/g0_robot_lab && pytest tests/unit/test_elastic_band_unitree_keys.py -v`  
 Expected: FAIL (`AttributeError: adjust_rest_length`)
 
-- [ ] **Step 3: Minimal implementation**
+- [x] **Step 3: Minimal implementation**
 
 ```python
 # deploy/common/elastic_band.py — add methods to ElasticBand
@@ -264,12 +264,12 @@ def toggle_enabled(self) -> None:
     self.enabled = not self.enabled
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/unit/test_elastic_band_unitree_keys.py -v`  
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/unit/test_elastic_band_unitree_keys.py deploy/common/elastic_band.py

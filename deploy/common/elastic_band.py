@@ -62,6 +62,18 @@ class ElasticBand:
         print(f"[ElasticBand] calibrated L_rest = {self.L:.3f} m "
               f"(mode={self.mode}, one_sided={self.one_sided})")
 
+    def adjust_rest_length(self, delta: float) -> None:
+        """Nudge L_rest by ``delta`` m (Unitree keys 7/8 in main.cc).
+
+        Loosen (+delta, key 8) lengthens the rope so the robot descends;
+        tighten (-delta, key 7) shortens it so the robot lifts.
+        """
+        self.L = float(self.L) + float(delta)
+
+    def toggle_enabled(self) -> None:
+        """Flip the band on/off (Unitree key 9)."""
+        self.enabled = not self.enabled
+
     def update(self, backend):
         if not self.enabled:
             backend.clear_external_force()
