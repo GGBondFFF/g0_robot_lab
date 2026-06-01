@@ -552,7 +552,7 @@ python scripts/sim2sim/g0_action_diagnose.py --phase replay-rollout ...
 
 - [ ] **Step 4:** If replay is tight but closed-loop fails → retrain or new checkpoint
 
-- [ ] **Step 5:** Implement `test_g0_deploy_rlbase_30s_no_band.py`; remove xfail when L3 green
+- [x] **Step 5:** Implement `test_g0_deploy_rlbase_30s_no_band.py`; remove xfail when L3 green
 
 ---
 

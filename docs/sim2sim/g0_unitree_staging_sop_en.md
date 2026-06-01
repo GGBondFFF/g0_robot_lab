@@ -168,3 +168,22 @@ closed-loop control chain itself is verified (obs / mapping / ONNX equivalence
 all green); the standing failure is a **policy / MJCF-stance** issue, tracked
 separately in Phase 5 (Task 10). Until then, L3 assertions are marked
 `xfail` and L1/L2 are the merge gate (Milestone M1).
+
+### Phase 5 / Task 10 root-cause isolation
+
+Systematic isolation (MuJoCo side) pins the failure on the **policy**, not the
+physics or the deploy pipeline:
+
+| Probe | Command | Result |
+|-------|---------|--------|
+| PD-hold (zero action) at `default_stand`, 10 s | `g0_mujoco_zero_action.py` | `root_z=0.231` steady, `max\|dq\|→0` → **physics/pose/contact/PD stable** |
+| Closed-loop v0 policy, zero_cmd, no band, 10 s | `g0_mujoco_onnx_gui_runner.py --no-abort` | `root_z` 0.231 → 0.089 (t=1.0s) → ~0.053 fallen; `\|act\|max` 1.3 → 15 |
+| Obs / ONNX / mapping | contract scripts | all green (see `g0_onnx_closed_loop_gui_test_zh.md` §2) |
+
+Because PD-hold stands but the closed-loop policy drives itself over with
+growing actions, the fix is **policy-side** (retrain / domain-randomize / new
+checkpoint, plan Step 4 — needs an Isaac training run), not MJCF/PD tuning.
+The canonical L3 gate is `tests/deployment/test_g0_deploy_rlbase_30s_no_band.py`
+(`xfail` until a checkpoint passes; the next concrete step is the Isaac
+replay-rollout, `g0_action_diagnose.py --phase isaac`, to compare the trained
+policy's own rollout against the MuJoCo deploy).
