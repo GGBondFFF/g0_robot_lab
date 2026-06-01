@@ -338,9 +338,9 @@ git commit -m "feat(deploy): keyboard band actions for Unitree staging SOP"
 **Files:**
 - Modify: `deploy/robots/g0/main.py`
 
-- [ ] **Step 1: Import / construct `StagingContext` from yaml `staging:` block (Task 5 may add file; inline dict is OK for first pass)**
+- [x] **Step 1: Import / construct `StagingContext` from yaml `staging:` block (Task 5 may add file; inline dict is OK for first pass)**
 
-- [ ] **Step 2: In `tick()`, before `band.update(backend)`:**
+- [x] **Step 2: In `tick()`, before `band.update(backend)`:**
 
 ```python
 action = rc.consume_band_action()
@@ -357,9 +357,9 @@ elif action == "confirm_ground" and staging is not None:
     print("[Staging] feet_on_ground=True (manual confirm)")
 ```
 
-- [ ] **Step 3: Print SOP banner at startup when `deploy_staging.yaml` or `staging` section present**
+- [x] **Step 3: Print SOP banner at startup when `deploy_staging.yaml` or `staging` section present**
 
-- [ ] **Step 4: Manual GUI check**
+- [x] **Step 4: Manual GUI check**
 
 ```bash
 python -m deploy.robots.g0.main \
@@ -367,7 +367,7 @@ python -m deploy.robots.g0.main \
   --realtime --duration 60
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add deploy/robots/g0/main.py

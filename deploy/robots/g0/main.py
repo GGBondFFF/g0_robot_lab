@@ -20,6 +20,7 @@ import argparse
 import os
 import sys
 import time
+from types import SimpleNamespace
 
 import numpy as np
 import yaml
@@ -70,19 +71,42 @@ def _resolve_path(p, repo_root):
     return p if os.path.isabs(p) else os.path.join(repo_root, p)
 
 
-def tick(cmd_mgr, rc, band, backend, fsm):
+def tick(cmd_mgr, rc, band, backend, fsm, *, length_step_m: float = 0.1,
+         staging=None):
     """One policy step. Public so tests/soaks reuse the exact production path.
 
     Order matters:
         1. Pull latest keyboard cmd into the command manager.
-        2. Refresh the elastic band's xfrc_applied for THIS step. MuJoCo
+        2. Apply any pending Unitree-style band action (keys 7/8/9/g) for
+           THIS step, before the band force is recomputed.
+        3. Refresh the elastic band's xfrc_applied for THIS step. MuJoCo
            does not clear xfrc_applied between mj_step calls, but the
            force is a function of (base_pos, base_lin_vel) so we must
            recompute each policy tick or the support force goes stale —
            this was an actual bug in earlier viewer-mode runs.
-        3. Run the FSM (which calls env.step_*, which calls mj_step xN).
+        4. Run the FSM (which calls env.step_*, which calls mj_step xN).
+
+    ``length_step_m`` is the L_rest delta per 7/8 keypress; ``staging`` (when
+    provided) carries the ``feet_on_ground`` flag set by the 'g' key. With
+    production deploy.yaml (no band keys) consume_band_action() returns None,
+    so this is a no-op.
     """
     cmd_mgr.set(*rc.get_cmd())
+
+    action = rc.consume_band_action()
+    if action == "loosen":
+        band.adjust_rest_length(+length_step_m)
+        print(f"[ElasticBand] loosen -> L_rest={band.L:.3f} m")
+    elif action == "tighten":
+        band.adjust_rest_length(-length_step_m)
+        print(f"[ElasticBand] tighten -> L_rest={band.L:.3f} m")
+    elif action == "toggle":
+        band.toggle_enabled()
+        print(f"[ElasticBand] enabled={band.enabled}")
+    elif action == "confirm_ground" and staging is not None:
+        staging.feet_on_ground = True
+        print("[Staging] feet_on_ground=True (manual confirm)")
+
     band.update(backend)
     fsm.step()
 
@@ -187,6 +211,14 @@ def main():
           f"one_sided={band.one_sided}  anchor={band.anchor.tolist()}  "
           f"k={band.k}  c={band.c}  L0={band.L}")
 
+    length_step_m = float(eb_cfg.get("length_step_m", 0.1))
+
+    # ---- staging context (Unitree-aligned SOP). Present only when the config
+    # has a `staging:` block (deploy_staging.yaml). Task 5 promotes this inline
+    # stand-in to deploy.common.staging_context.StagingContext.
+    staging_cfg = cfg.get("staging")
+    staging = SimpleNamespace(feet_on_ground=False) if staging_cfg else None
+
     # ---- RC + FSM
     rc = RemoteController(cfg["keys"])
 
@@ -212,6 +244,13 @@ def main():
     print("=" * 90)
     print("Keys: p=Passive  f=FixStand  r=RLBase  0=zero cmd")
     print("      w/s=vx+/-  a/d=vy+/-  q/e=wz+/-")
+    if staging is not None:
+        print("-" * 90)
+        print("STAGING SOP (Unitree-aligned, band=on):")
+        print("  1) f  -> FixStand        2) 8 -> loosen/descend  (7 = tighten/lift)")
+        print("  3) g  -> confirm ground  4) r -> RLBase (gated until ground)")
+        print("  5) 9  -> toggle band off 6) hold zero_cmd; aim RLBase >=30s no band")
+        print(f"  band length step = {length_step_m:.3f} m/keypress")
     print()
 
     step_dt = float(cfg["step_dt"])
@@ -220,7 +259,8 @@ def main():
         n_steps = int(args.duration / step_dt)
         t0 = time.time()
         for i in range(n_steps):
-            tick(cmd_mgr, rc, band, backend, fsm)
+            tick(cmd_mgr, rc, band, backend, fsm,
+                 length_step_m=length_step_m, staging=staging)
             if (i % 50) == 0:
                 s = backend.read_state()
                 print(f"  t={s['sim_time']:6.2f}  state={fsm.current.name:10s}  cmd={rc.get_cmd()}")
@@ -242,7 +282,8 @@ def main():
             t0 = time.time()
             sim_t0 = backend.data.time
             while viewer.is_running() and (backend.data.time - sim_t0) < args.duration:
-                tick(cmd_mgr, rc, band, backend, fsm)
+                tick(cmd_mgr, rc, band, backend, fsm,
+                     length_step_m=length_step_m, staging=staging)
                 viewer.sync()
                 if args.realtime:
                     wall = time.time() - t0
