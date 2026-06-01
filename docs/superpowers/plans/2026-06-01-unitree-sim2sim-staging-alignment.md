@@ -456,9 +456,9 @@ if requested == "rl_base":
 **Files:**
 - Create: `tests/deployment/test_g0_staging_sop.py`
 
-- [ ] **Step 1:** Copy pipeline builder from `test_g0_deploy_soak.py`; point to `deploy_staging.yaml`
+- [x] **Step 1:** Copy pipeline builder from `test_g0_deploy_soak.py`; point to `deploy_staging.yaml`
 
-- [ ] **Step 2:** Scripted sequence:
+- [x] **Step 2:** Scripted sequence:
 
 ```python
 def test_staging_sop_headless(staging_cfg):
@@ -486,15 +486,15 @@ def test_staging_sop_headless(staging_cfg):
     # L3 may fail on v0 policy — see Task 10
 ```
 
-- [ ] **Step 3:** Mark policy-dependent assertion as `@pytest.mark.xfail(strict=False, reason="v0 policy MuJoCo standing")` until Phase 5 passes
+- [x] **Step 3:** Mark policy-dependent assertion as `@pytest.mark.xfail(strict=False, reason="v0 policy MuJoCo standing")` until Phase 5 passes
 
-- [ ] **Step 4: Run**
+- [x] **Step 4: Run**
 
 ```bash
 pytest tests/deployment/test_g0_staging_sop.py tests/unit/test_elastic_band_unitree_keys.py -v
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ---
 
