@@ -386,7 +386,7 @@ git commit -m "feat(deploy): apply Unitree 7/8/9 band keys in main loop"
 - Modify: `deploy/robots/g0/main.py` (pass `staging` into FSM states)
 - Create: `tests/deployment/test_g0_staging_fsm_gate.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/deployment/test_g0_staging_fsm_gate.py
@@ -395,7 +395,7 @@ git commit -m "feat(deploy): apply Unitree 7/8/9 band keys in main loop"
 # press g, press r -> rl_base
 ```
 
-- [ ] **Step 2: Implement `StagingContext`**
+- [x] **Step 2: Implement `StagingContext`**
 
 ```python
 # deploy/common/staging_context.py
@@ -416,7 +416,7 @@ class StagingContext:
         ...
 ```
 
-- [ ] **Step 3: Update `StateFixStand.check_transition`**
+- [x] **Step 3: Update `StateFixStand.check_transition`**
 
 ```python
 if requested == "rl_base":
@@ -427,9 +427,9 @@ if requested == "rl_base":
         return "rl_base"
 ```
 
-- [ ] **Step 4: Optional auto-detect in `tick()` when staging enabled**
+- [x] **Step 4: Optional auto-detect in `tick()` when staging enabled**
 
-- [ ] **Step 5: pytest PASS + commit**
+- [x] **Step 5: pytest PASS + commit**
 
 ---
 

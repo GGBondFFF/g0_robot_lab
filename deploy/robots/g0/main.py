@@ -20,7 +20,6 @@ import argparse
 import os
 import sys
 import time
-from types import SimpleNamespace
 
 import numpy as np
 import yaml
@@ -34,6 +33,7 @@ if _DEPLOY_ROOT not in sys.path:
 from deploy.backends.mujoco_backend import MujocoBackend
 from deploy.common.elastic_band import ElasticBand
 from deploy.common.remote_controller import RemoteController
+from deploy.common.staging_context import StagingContext
 from deploy.isaaclab.algorithms.ort_runner import OrtRunner
 from deploy.isaaclab.envs.manager_based_rl_env import ManagerBasedRLEnv
 from deploy.isaaclab.managers.action_manager import JointPositionAction
@@ -214,10 +214,10 @@ def main():
     length_step_m = float(eb_cfg.get("length_step_m", 0.1))
 
     # ---- staging context (Unitree-aligned SOP). Present only when the config
-    # has a `staging:` block (deploy_staging.yaml). Task 5 promotes this inline
-    # stand-in to deploy.common.staging_context.StagingContext.
+    # has a `staging:` block (deploy_staging.yaml); None for production
+    # deploy.yaml so the FSM ground-gate stays inactive.
     staging_cfg = cfg.get("staging")
-    staging = SimpleNamespace(feet_on_ground=False) if staging_cfg else None
+    staging = StagingContext(staging_cfg) if staging_cfg else None
 
     # ---- RC + FSM
     rc = RemoteController(cfg["keys"])
@@ -233,7 +233,7 @@ def main():
             env, rc=rc, default_q_mj=default_q_mj,
             ramp_time_s=cfg["fix_stand"]["ramp_time_s"],
             step_dt=cfg["step_dt"],
-            band=band,
+            band=band, staging=staging,
         ),
         "rl_base": StateRLBase(env, ort_runner=ort, rc=rc),
     }

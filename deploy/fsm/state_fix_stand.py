@@ -10,12 +10,13 @@ class StateFixStand(FSMState):
 
     def __init__(self, env, ort_runner=None, cfg=None, rc=None,
                  default_q_mj=None, ramp_time_s: float = 1.5, step_dt: float = 0.02,
-                 band=None):
+                 band=None, staging=None):
         super().__init__(env, ort_runner, cfg, rc)
         self.default_q_mj = default_q_mj
         self.ramp_time_s = float(ramp_time_s)
         self.step_dt = float(step_dt)
         self.band = band
+        self.staging = staging
         self._q_start = None
         self._t = 0.0
         self._calibrated = False
@@ -45,11 +46,24 @@ class StateFixStand(FSMState):
                 and self.band is not None):
             self.band.calibrate(self.env.backend)
             self._calibrated = True
+        # Optional staging ground auto-detect (no-op unless enabled in cfg).
+        # Runs during the lowering phase; flips staging.feet_on_ground once the
+        # base has held a ground pose for ground_hold_s.
+        if self.staging is not None:
+            self.staging.maybe_auto_detect(self.env.backend, self.step_dt)
 
     def check_transition(self, requested):
         if requested == "passive":
             return "passive"
         # Allow RLBase only after ramp completes (Unitree gates this similarly).
-        if requested == "rl_base" and self._t >= self.ramp_time_s:
-            return "rl_base"
+        if requested == "rl_base":
+            # Staging gate: feet must be confirmed on the ground first (press
+            # 'g' after lowering with '8'), mirroring the Unitree SOP.
+            if (self.staging is not None and self.staging.enabled()
+                    and not self.staging.feet_on_ground):
+                print("[FSM] reject rl_base: confirm ground (press 'g') "
+                      "after lowering with '8'")
+                return None
+            if self._t >= self.ramp_time_s:
+                return "rl_base"
         return None
