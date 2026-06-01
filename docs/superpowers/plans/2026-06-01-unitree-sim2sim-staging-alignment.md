@@ -138,7 +138,7 @@ git commit -m "docs: add Unitree-aligned G0 sim2sim staging SOP"
 - Create: `deploy/robots/g0/config/policy/velocity/v0/deploy_staging.yaml`
 - Modify: `deploy/README.md` (staging section only)
 
-- [ ] **Step 1:** Copy `deploy.yaml`; apply staging overrides:
+- [x] **Step 1:** Copy `deploy.yaml`; apply staging overrides:
 
 ```yaml
 # deploy_staging.yaml — key differences from deploy.yaml
@@ -178,9 +178,9 @@ keys:
   confirm_ground: "g"
 ```
 
-- [ ] **Step 2:** README: add “Sim2sim staging (Unitree-aligned)” pointing to `deploy_staging.yaml`
+- [x] **Step 2:** README: add “Sim2sim staging (Unitree-aligned)” pointing to `deploy_staging.yaml`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add deploy/robots/g0/config/policy/velocity/v0/deploy_staging.yaml deploy/README.md

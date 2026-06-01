@@ -63,6 +63,26 @@ cd /home/lz/g0_robot_lab/g0_robot_lab
 pytest tests/deployment/test_g0_deploy_soak.py -v
 ```
 
+## Sim2sim staging (Unitree-aligned)
+
+For the Unitree-style staging flow (elastic band on → FixStand → lower feet with
+key `8` → confirm ground with `g` → RLBase → disable band with `9`), use the
+**staging** profile instead of `deploy.yaml`:
+
+```bash
+cd /home/lz/g0_robot_lab/g0_robot_lab
+python -m deploy.robots.g0.main \
+    --config deploy/robots/g0/config/policy/velocity/v0/deploy_staging.yaml \
+    --duration 120 --realtime
+```
+
+`deploy_staging.yaml` turns the elastic band **on** by default, adds the
+`7`/`8`/`9`/`g` band+ground keys, and a `staging:` ground-confirm gate.
+Production `deploy.yaml` is unchanged (band off, no staging keys).
+
+Full operator SOP and the L1–L4 acceptance levels:
+[`docs/sim2sim/g0_unitree_staging_sop_en.md`](../docs/sim2sim/g0_unitree_staging_sop_en.md).
+
 ## What this does NOT do
 
 - Train. Use `scripts/sim2sim/g0_train_dr_dryrun.py` and IsaacLab for that.
