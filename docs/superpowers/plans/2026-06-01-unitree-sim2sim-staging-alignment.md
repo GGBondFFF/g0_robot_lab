@@ -284,7 +284,7 @@ git commit -m "feat(deploy): Unitree-style elastic band length adjust API"
 - Modify: `deploy/common/remote_controller.py`
 - Create: `tests/unit/test_remote_controller_band_keys.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/unit/test_remote_controller_band_keys.py
@@ -316,15 +316,15 @@ def test_confirm_ground_key():
     assert rc.consume_band_action() == "confirm_ground"
 ```
 
-- [ ] **Step 2: Run test — expect FAIL**
+- [x] **Step 2: Run test — expect FAIL**
 
-- [ ] **Step 3: Implement `pending_band_action` + `consume_band_action()`**
+- [x] **Step 3: Implement `pending_band_action` + `consume_band_action()`**
 
 Use `.get("band_loosen")` on `key_bindings` so missing keys do not break production `deploy.yaml`.
 
-- [ ] **Step 4: Run test — expect PASS**
+- [x] **Step 4: Run test — expect PASS**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add deploy/common/remote_controller.py tests/unit/test_remote_controller_band_keys.py

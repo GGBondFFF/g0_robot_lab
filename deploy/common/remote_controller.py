@@ -12,6 +12,8 @@ class RemoteController:
         self.kb = key_bindings
         self._lock = threading.Lock()
         self.pending_fsm = None     # one of: "passive", "fix_stand", "rl_base"
+        # one of: "loosen", "tighten", "toggle", "confirm_ground" (Unitree staging keys)
+        self.pending_band_action = None
         self.cmd = [0.0, 0.0, 0.0]  # vx, vy, wz
         # nudge step sizes
         self.dv = 0.1
@@ -42,6 +44,21 @@ class RemoteController:
                 self.cmd[2] += self.dw
             elif c == self.kb["wz_right"]:
                 self.cmd[2] -= self.dw
+            # Unitree staging band keys. Use .get() so production deploy.yaml,
+            # which has no band bindings, is unaffected (no key -> None != c).
+            elif c == self.kb.get("band_loosen"):
+                self.pending_band_action = "loosen"
+            elif c == self.kb.get("band_tighten"):
+                self.pending_band_action = "tighten"
+            elif c == self.kb.get("band_toggle"):
+                self.pending_band_action = "toggle"
+            elif c == self.kb.get("confirm_ground"):
+                self.pending_band_action = "confirm_ground"
+
+    def consume_band_action(self):
+        with self._lock:
+            v, self.pending_band_action = self.pending_band_action, None
+            return v
 
     def consume_fsm(self):
         with self._lock:
