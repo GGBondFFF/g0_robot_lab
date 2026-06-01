@@ -110,8 +110,8 @@ Unitree official sim2sim effectively targets **L4 (visual)**. G0 should ship **L
 - Create: `docs/sim2sim/g0_unitree_staging_sop_en.md`
 - Optional: `docs/sim2sim/g0_unitree_staging_sop_zh.md`
 
-- [ ] **Step 1:** Document official Unitree G1 steps (two terminals: `unitree_mujoco`, `g1_ctrl`)
-- [ ] **Step 2:** Document G0 equivalent single-process command:
+- [x] **Step 1:** Document official Unitree G1 steps (two terminals: `unitree_mujoco`, `g1_ctrl`)
+- [x] **Step 2:** Document G0 equivalent single-process command:
 
 ```bash
 cd /home/lz/g0_robot_lab/g0_robot_lab
@@ -120,10 +120,10 @@ python -m deploy.robots.g0.main \
   --duration 120 --realtime
 ```
 
-- [ ] **Step 3:** Keyboard table: `f` / `r` / `p`, `7` / `8` / `9`, `g`, `0`, `w/s/a/d/q/e`
-- [ ] **Step 4:** Link acceptance levels L1–L4 and known v0 policy limitation (§8 of `g0_onnx_closed_loop_gui_test_zh.md`)
+- [x] **Step 3:** Keyboard table: `f` / `r` / `p`, `7` / `8` / `9`, `g`, `0`, `w/s/a/d/q/e`
+- [x] **Step 4:** Link acceptance levels L1–L4 and known v0 policy limitation (§8 of `g0_onnx_closed_loop_gui_test_zh.md`)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/sim2sim/g0_unitree_staging_sop_en.md
