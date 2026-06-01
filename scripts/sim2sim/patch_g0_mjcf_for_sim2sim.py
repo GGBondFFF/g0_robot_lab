@@ -364,9 +364,15 @@ def ensure_keyframe(root):
 
     # freejoint qpos = x y z qw qx qy qz
     root_qpos = [0.0, 0.0, 0.23, 1.0, 0.0, 0.0, 0.0]
+    # suspended_stand: same joint pose as default_stand but raised so the
+    # elastic band visibly holds the robot off the ground (Unitree staging SOP).
+    # Opt-in via deploy_staging.yaml `keyframe: suspended_stand`.
+    suspended_root_qpos = [0.0, 0.0, 0.50, 1.0, 0.0, 0.0, 0.0]
+    default_joints = [DEFAULT_Q[name] for name in MUJOCO_JOINT_ORDER]
     keyframes = {
         "zero_pose": root_qpos + [0.0 for _ in MUJOCO_JOINT_ORDER],
-        "default_stand": root_qpos + [DEFAULT_Q[name] for name in MUJOCO_JOINT_ORDER],
+        "default_stand": root_qpos + default_joints,
+        "suspended_stand": suspended_root_qpos + default_joints,
     }
 
     for name, qpos in keyframes.items():

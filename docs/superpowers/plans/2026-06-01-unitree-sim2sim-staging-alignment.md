@@ -439,13 +439,13 @@ if requested == "rl_base":
 - Modify: `source/g0_robot_lab/g0_robot_lab/assets/robots/g0/mujoco/model_patched.xml` (or `scripts/sim2sim/patch_g0_mjcf_for_sim2sim.py`)
 - Modify: `deploy_staging.yaml` → `keyframe: suspended_stand`
 
-- [ ] **Step 1:** Add keyframe with `root_z` in `[0.45, 0.55]`, joint qpos matching `default_stand` leg/arm layout
+- [x] **Step 1:** Add keyframe with `root_z` in `[0.45, 0.55]`, joint qpos matching `default_stand` leg/arm layout
 
-- [ ] **Step 2:** Verify band can hold robot: run `scripts/sim2sim/g0_mujoco_zero_action.py` with band equivalent or deploy staging
+- [x] **Step 2:** Verify band can hold robot: run `scripts/sim2sim/g0_mujoco_zero_action.py` with band equivalent or deploy staging
 
-- [ ] **Step 3:** Document when to use `suspended_stand` vs `default_stand` in SOP doc
+- [x] **Step 3:** Document when to use `suspended_stand` vs `default_stand` in SOP doc
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ---
 
