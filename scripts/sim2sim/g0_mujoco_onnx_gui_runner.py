@@ -34,6 +34,14 @@ import mujoco.viewer
 import numpy as np
 import onnxruntime as ort
 
+# Make the repo-root `deploy` package importable so the band logic is shared
+# (DRY) with deploy/robots/g0/main.py instead of duplicated inline here.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from deploy.common.elastic_band import ElasticBand  # noqa: E402
+
 
 # -----------------------------------------------------------------------------
 # Joint orders
@@ -248,7 +256,38 @@ def build_obs_385(history_77):
 # Main loop
 # -----------------------------------------------------------------------------
 
-def main():
+class _MjBaseBandAdapter:
+    """Thin backend adapter so the shared ElasticBand can drive this runner.
+
+    Exposes the read_state / apply_external_force / clear_external_force
+    surface ElasticBand expects, backed directly by MuJoCo (model not needed —
+    only the base body's qpos/qvel and its xfrc_applied row).
+    """
+
+    def __init__(self, data, base_body_id):
+        self.data = data
+        self.base_body_id = base_body_id
+
+    def read_state(self):
+        return {
+            "base_pos_w": self.data.qpos[0:3].copy(),
+            "base_lin_vel_w": self.data.qvel[0:3].copy(),
+        }
+
+    def apply_external_force(self, force_w):
+        self.data.xfrc_applied[self.base_body_id, 0:3] = force_w
+
+    def clear_external_force(self):
+        self.data.xfrc_applied[self.base_body_id, 0:3] = 0.0
+
+
+def band_enabled_from_args(args):
+    """Band is on if explicitly requested or implied by the staging preset."""
+    return bool(getattr(args, "elastic_band", False)
+                or getattr(args, "staging_sop", False))
+
+
+def build_arg_parser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--policy", required=True, help="path to policy.onnx")
@@ -282,6 +321,10 @@ def main():
     # 在仿真中设计了一个虚拟挂带,用于模拟人形机器人的吊起和放下".
     ap.add_argument("--elastic-band", action="store_true",
                     help="Enable virtual elastic-band suspension on base_link (Unitree pattern).")
+    ap.add_argument("--staging-sop", action="store_true",
+                    help="Unitree staging preset: enable the elastic band and print the "
+                         "7/8/9 SOP help. (Canonical staging entry is deploy/main + "
+                         "deploy_staging.yaml; this runner is diagnostic.)")
     ap.add_argument("--band-anchor", default="0 0 2.0",
                     help="World-frame anchor point 'x y z' for the band (m). Unitree default '0 0 3'.")
     ap.add_argument("--band-stiffness", type=float, default=10.0,
@@ -292,7 +335,19 @@ def main():
                     help="Band rest length (m). Default 0 matches Unitree convention.")
     ap.add_argument("--no-abort", action="store_true",
                     help="Disable early abort on root_z/rpy/NaN — keep stepping so the GUI run plays out.")
-    args = ap.parse_args()
+    return ap
+
+
+def main():
+    args = build_arg_parser().parse_args()
+    if args.staging_sop:
+        print("=" * 70)
+        print("STAGING SOP preset (diagnostic runner): elastic band ENABLED.")
+        print("  Band keys 7/8/9 + ground gate live in the canonical entry:")
+        print("    python -m deploy.robots.g0.main \\")
+        print("      --config deploy/robots/g0/config/policy/velocity/v0/deploy_staging.yaml")
+        print("  This runner only suspends with a static band (no keyboard SOP).")
+        print("=" * 70)
 
     # ---- model
     model = mujoco.MjModel.from_xml_path(args.model)
@@ -382,13 +437,20 @@ def main():
     decimation = max(1, int(round(POLICY_DT / model.opt.timestep)))
     n_policy_steps = int(round(args.duration / POLICY_DT))
 
-    # ---- elastic band setup (mirrors unitree_mujoco/simulate/src/main.cc:54-86)
+    # ---- elastic band setup. DRY: drive the shared deploy ElasticBand via a
+    # thin MuJoCo adapter instead of duplicating the xfrc math. one_sided=False
+    # reproduces this runner's historical two-sided band exactly.
     band_anchor = np.array([float(x) for x in args.band_anchor.split()], dtype=np.float64)
     assert band_anchor.shape == (3,), "--band-anchor must be 'x y z'"
     band_k = float(args.band_stiffness)
     band_c = float(args.band_damping)
     band_L = float(args.band_length)
-    if args.elastic_band:
+    band_on = band_enabled_from_args(args)
+    band = ElasticBand(anchor=tuple(band_anchor), stiffness=band_k, damping=band_c,
+                       rest_length=band_L, enabled=band_on, one_sided=False,
+                       mode="rope")
+    band_adapter = _MjBaseBandAdapter(data, base_body_id)
+    if band_on:
         x0 = data.qpos[0:3].copy()
         d0 = float(np.linalg.norm(band_anchor - x0))
         f0 = band_k * (d0 - band_L)
@@ -487,18 +549,10 @@ def main():
                 max_abs_tau = float(np.max(np.abs(tau)))
                 sat_ratio = float(np.mean(np.abs(tau_unclipped) >= 0.999 * ctrl_max_abs))
                 for _ in range(decimation):
-                    # Apply elastic-band external force to base_link each sim step
-                    # (per unitree_mujoco/simulate/src/main.cc:489-503).
-                    if args.elastic_band:
-                        x_base = data.qpos[0:3]
-                        v_base = data.qvel[0:3]
-                        delta = band_anchor - x_base
-                        dist = float(np.linalg.norm(delta))
-                        if dist > 1e-9:
-                            dir_unit = delta / dist
-                            v_along = float(np.dot(v_base, dir_unit))
-                            scalar_f = band_k * (dist - band_L) - band_c * v_along
-                            data.xfrc_applied[base_body_id, 0:3] = scalar_f * dir_unit
+                    # Refresh the elastic-band force on base_link each sim step
+                    # via the shared ElasticBand (DRY; per unitree_mujoco
+                    # simulate/src/main.cc:489-503). No-op when band disabled.
+                    band.update(band_adapter)
                     mujoco.mj_step(model, data)
 
                 last_action_sdk = action_sdk.copy()

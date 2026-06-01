@@ -115,6 +115,15 @@ GUI + 小 vx：
 - `--realtime`：限制 GUI 步进到 wall-clock 实时（默认 as fast as possible）。
 - `--print-every 0.5`：每 0.5 仿真秒打印一次状态行。
 - `--csv <path>`：自定义 CSV 输出路径。
+- `--elastic-band` / `--staging-sop`：开启虚拟挂带（Unitree pattern）。挂带力学已 DRY
+  到共享的 `deploy/common/elastic_band.py::ElasticBand`（本脚本只是用一个 thin adapter
+  驱动它，不再内联 `xfrc_applied` 公式）。`--staging-sop` 是一个 preset：开挂带并打印
+  7/8/9 SOP 提示。
+
+> 注意：完整的 Unitree staging SOP（band on → FixStand → 按 8 下降 → 按 g 确认触地 →
+> RLBase → 按 9 关挂带）的**正式入口是 `deploy/main` + `deploy_staging.yaml`**，见
+> [`g0_unitree_staging_sop_en.md`](g0_unitree_staging_sop_en.md)。本脚本是诊断工具，
+> 只做静态挂带悬吊，不实现键盘 SOP。
 
 ## 7. 通过 / 失败标准
 

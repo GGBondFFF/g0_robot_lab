@@ -504,11 +504,11 @@ pytest tests/deployment/test_g0_staging_sop.py tests/unit/test_elastic_band_unit
 - Modify: `scripts/sim2sim/g0_mujoco_onnx_gui_runner.py`
 - Modify: `docs/sim2sim/g0_onnx_closed_loop_gui_test_zh.md` (staging command section)
 
-- [ ] **Step 1:** Replace inline `xfrc_applied` band math with `ElasticBand.update()` via a thin adapter implementing `read_state` / `apply_external_force` / `clear_external_force`
+- [x] **Step 1:** Replace inline `xfrc_applied` band math with `ElasticBand.update()` via a thin adapter implementing `read_state` / `apply_external_force` / `clear_external_force`
 
-- [ ] **Step 2:** Add `--staging-sop` flag: enables band + prints 7/8/9 help
+- [x] **Step 2:** Add `--staging-sop` flag: enables band + prints 7/8/9 help
 
-- [ ] **Step 3:** Commit + update doc
+- [x] **Step 3:** Commit + update doc
 
 ---
 
