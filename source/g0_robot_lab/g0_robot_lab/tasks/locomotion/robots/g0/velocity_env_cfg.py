@@ -35,7 +35,7 @@ from g0_robot_lab.tasks.locomotion import mdp
 #                    stage-1 checkpoint, NOT from scratch.
 # Curriculum advancement criteria are intentionally NOT modified.
 # -----------------------------------------------------------------------------
-DR_STAGE = 2
+DR_STAGE = 1
 ##
 # Pre-defined configs
 ##
@@ -545,13 +545,17 @@ class G0RobotLabEnvCfg(ManagerBasedRLEnvCfg):
             # sim2sim gap (use to fine-tune from a stage-1 checkpoint). Curriculum
             # advancement criteria are NOT modified here.
             if DR_STAGE >= 2:
-                # (1) base_ang_vel obs noise: +/-0.2 -> +/-0.8 rad/s (covers p95).
-                self.observations.policy.base_ang_vel.noise = Unoise(n_min=-0.8, n_max=0.8)
+                # (1) base_ang_vel obs noise: +/-0.2 -> +/-1.0 rad/s. Widened from
+                # +/-0.8 (p95) toward the measured divergence max ~1.24 rad/s,
+                # because closed-loop bav exceeds the open-loop p95 once actions
+                # start to diverge (positive feedback). +/-0.8 only got time-to-
+                # fall ~1.4s -> ~4s; push the tolerance further.
+                self.observations.policy.base_ang_vel.noise = Unoise(n_min=-1.0, n_max=1.0)
                 # (2) add angular pushes on the load-bearing base_ang_vel channel.
                 self.events.push_robot.params["velocity_range"].update({
-                    "roll": (-0.8, 0.8),
-                    "pitch": (-0.8, 0.8),
-                    "yaw": (-0.8, 0.8),
+                    "roll": (-1.0, 1.0),
+                    "pitch": (-1.0, 1.0),
+                    "yaw": (-1.0, 1.0),
                 })
                 # (3) actuator PD-gain scale +/-20% (implicit-vs-explicit PD seed).
                 self.events.randomize_actuator_gains.params["stiffness_distribution_params"] = (0.8, 1.2)
