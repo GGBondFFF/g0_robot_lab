@@ -24,6 +24,18 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from g0_robot_lab.tasks.locomotion import mdp
 
 # import isaaclab_tasks.manager_based.locomotion.velocity.mdp as velocity_mdp
+
+# -----------------------------------------------------------------------------
+# Staged domain randomization.
+#   DR_STAGE = 1  -> bootstrap config (mild DR): train from scratch until the
+#                    command curriculum advances and low-speed walking is stable.
+#   DR_STAGE = 2  -> sim2sim-hardening DR, applied in G0RobotLabEnvCfg.__post_init__
+#                    (widen base_ang_vel obs noise to +/-0.8, add +/-0.8 angular
+#                    pushes, +/-20% actuator-gain scale). Use to FINE-TUNE from a
+#                    stage-1 checkpoint, NOT from scratch.
+# Curriculum advancement criteria are intentionally NOT modified.
+# -----------------------------------------------------------------------------
+DR_STAGE = 2
 ##
 # Pre-defined configs
 ##
@@ -128,8 +140,6 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
             "static_friction_range": (0.3, 1.0),
             "dynamic_friction_range": (0.3, 1.0),
-            # "static_friction_range": (0.8, 1.0),
-            # "dynamic_friction_range": (0.8, 1.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
             # "num_buckets": 32,
@@ -193,6 +203,8 @@ class EventCfg:
 
     # Push is useful later, but it can make first-stage debugging harder.
     # Enable only after default standing and low-speed walking are stable.
+    # Stage-1: linear pushes only. Stage-2 adds roll/pitch/yaw +/-0.8 angular
+    # pushes (the load-bearing base_ang_vel channel) via __post_init__.
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
@@ -200,6 +212,22 @@ class EventCfg:
         params={"velocity_range": {
             "x": (-0.5, 0.5),
             "y": (-0.5, 0.5)}},
+    )
+
+    # Actuator PD-gain randomization (covers the implicit-vs-explicit PD seed of
+    # the sim2sim base_ang_vel divergence). Stage-1 = no-op (scale 1.0); stage-2
+    # sets +/-20% scale via __post_init__. startup mode per IsaacLab guidance for
+    # ImplicitActuator (gains written via CPU tensors).
+    randomize_actuator_gains = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
+            "stiffness_distribution_params": (1.0, 1.0),
+            "damping_distribution_params": (1.0, 1.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
     )
 
 ##
@@ -256,6 +284,9 @@ class ObservationsCfg:
         base_ang_vel = ObsTerm(
             func=mdp.base_ang_vel,
             scale=0.2,
+            # Stage-1 (bootstrap) noise. Stage-2 widens to +/-0.8 to cover the
+            # measured MuJoCo<->Isaac base_ang_vel divergence (p95~0.79 rad/s),
+            # applied in G0RobotLabEnvCfg.__post_init__ when DR_STAGE >= 2.
             noise=Unoise(n_min=-0.2, n_max=0.2)
         )
         projected_gravity = ObsTerm(
@@ -508,6 +539,23 @@ class G0RobotLabEnvCfg(ManagerBasedRLEnvCfg):
             else:
                 if self.scene.terrain.terrain_generator is not None:
                     self.scene.terrain.terrain_generator.curriculum = False
+
+            # Staged sim2sim-hardening DR. Stage-1 leaves the bootstrap config
+            # untouched; stage-2 widens the randomization to cover the measured
+            # sim2sim gap (use to fine-tune from a stage-1 checkpoint). Curriculum
+            # advancement criteria are NOT modified here.
+            if DR_STAGE >= 2:
+                # (1) base_ang_vel obs noise: +/-0.2 -> +/-0.8 rad/s (covers p95).
+                self.observations.policy.base_ang_vel.noise = Unoise(n_min=-0.8, n_max=0.8)
+                # (2) add angular pushes on the load-bearing base_ang_vel channel.
+                self.events.push_robot.params["velocity_range"].update({
+                    "roll": (-0.8, 0.8),
+                    "pitch": (-0.8, 0.8),
+                    "yaw": (-0.8, 0.8),
+                })
+                # (3) actuator PD-gain scale +/-20% (implicit-vs-explicit PD seed).
+                self.events.randomize_actuator_gains.params["stiffness_distribution_params"] = (0.8, 1.2)
+                self.events.randomize_actuator_gains.params["damping_distribution_params"] = (0.8, 1.2)
 
 @configclass
 class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
