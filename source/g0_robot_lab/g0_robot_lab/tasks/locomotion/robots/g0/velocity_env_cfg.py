@@ -20,10 +20,22 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from g0_robot_lab.tasks.locomotion import mdp
 
 # import isaaclab_tasks.manager_based.locomotion.velocity.mdp as velocity_mdp
+
+# -----------------------------------------------------------------------------
+# Staged domain randomization.
+#   DR_STAGE = 1  -> bootstrap config (mild DR): train from scratch until the
+#                    command curriculum advances and low-speed walking is stable.
+#   DR_STAGE = 2  -> sim2sim-hardening DR, applied in G0RobotLabEnvCfg.__post_init__
+#                    (widen base_ang_vel obs noise to +/-0.8, add +/-0.8 angular
+#                    pushes, +/-20% actuator-gain scale). Use to FINE-TUNE from a
+#                    stage-1 checkpoint, NOT from scratch.
+# Curriculum advancement criteria are intentionally NOT modified.
+# -----------------------------------------------------------------------------
+DR_STAGE = 1
 ##
 # Pre-defined configs
 ##
@@ -42,26 +54,25 @@ G0_FOOT_BODY_NAMES = [
 
 ##
 # Terrain config
+#
+# Unitree G1 uses 9x21 tiles with use_terrain_origins=True (default): envs share tile
+# centers for GPU-parallel training. For grid-spaced robots, set use_terrain_origins=False
+# below and size the tile grid to cover num_envs * env_spacing (~160 m for 4096 @ 2.5 m).
 ##
 G0_FLAT_TERRAIN_CFG = terrain_gen.TerrainGeneratorCfg(
-    size=(8.0,8.0),
+    size=(8.0, 8.0),
     border_width=20.0,
-    num_rows=9,
-    num_cols=21,
+    num_rows=22,
+    num_cols=22,
     horizontal_scale=0.1,
     vertical_scale=0.005,
     slope_threshold=0.75,
-    # initial set difficulty range, it will be changed later
-    difficulty_range=(0.0,1.0),
+    difficulty_range=(0.0, 1.0),
     use_cache=False,
     sub_terrains={
         "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.5),
     },
 )
-
-##
-# Terrain config
-##
 
 @configclass
 class G0RobotLabSceneCfg(InteractiveSceneCfg):
@@ -70,17 +81,21 @@ class G0RobotLabSceneCfg(InteractiveSceneCfg):
     # ground terrain
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        # terrain_type="generator",  # "plane", "generator"
-        # terrain_generator=G0_FLAT_TERRAIN_CFG, # None, ROUGH_TERRAINS_CFG
-        # max_init_terrain_level=G0_FLAT_TERRAIN_CFG.num_rows - 1,
-        terrain_type = "plane",
-        terrain_generator = None,
+        terrain_type="generator",  # "plane", "generator"
+        terrain_generator=G0_FLAT_TERRAIN_CFG,
+        max_init_terrain_level=G0_FLAT_TERRAIN_CFG.num_rows - 1,
+        use_terrain_origins=False,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
             dynamic_friction=1.0,
+        ),
+        visual_material=sim_utils.MdlFileCfg(
+            mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+            project_uvw=True,
+            texture_scale=(0.25, 0.25),
         ),
         debug_vis=False,
     )
@@ -125,21 +140,21 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
             "static_friction_range": (0.3, 1.0),
             "dynamic_friction_range": (0.3, 1.0),
-            # "static_friction_range": (0.8, 1.0),
-            # "dynamic_friction_range": (0.8, 1.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
             # "num_buckets": 32,
         },
     )
-    # Keep base mass randomization disable at beginning.
-    # Enable it after robot can stand and walk on flat ground.
+    # P4 (sim2sim-aligned, was (-0.2, 0.5)): widen to match Unitree G1 scale
+    # (G1 uses -1.0..+3.0 on torso ~6 kg → ~17%..50% torso mass band; here on
+    # G0 torso ~0.5 kg → -60%..+200%, but this is fine since G0 only has 1.4 kg
+    # total — we want the policy robust to substantial CoM/mass shifts).
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "mass_distribution_params": (-0.2, 0.5),
+            "mass_distribution_params": (-0.3, 1.0),
             "operation": "add",
         },
     )
@@ -160,11 +175,11 @@ class EventCfg:
         mode="reset",
         params={
             "pose_range": {
-                "x": (-0.2, 0.2),
-                "y": (-0.2, 0.2),
-                # same as code_base, maybe too large, it will be changed later
-                # "yaw": (-3.14, 3.14)
-                "yaw":(-0.2,0.2)
+                "x": (-0.5, 0.5),
+                "y": (-0.5, 0.5),
+                # P4 (sim2sim-aligned, was (-0.2, 0.2)): full Unitree range so
+                # the policy sees arbitrary yaw at episode start.
+                "yaw": (-3.14, 3.14),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
@@ -182,12 +197,14 @@ class EventCfg:
         mode="reset",
         params={
             "position_range": (1.0, 1.0),
-            "velocity_range": (-0.2, 0.2),
+            "velocity_range": (-0.5, 0.5),
         },
     )
 
     # Push is useful later, but it can make first-stage debugging harder.
     # Enable only after default standing and low-speed walking are stable.
+    # Stage-1: linear pushes only. Stage-2 adds roll/pitch/yaw +/-0.8 angular
+    # pushes (the load-bearing base_ang_vel channel) via __post_init__.
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
@@ -195,6 +212,22 @@ class EventCfg:
         params={"velocity_range": {
             "x": (-0.5, 0.5),
             "y": (-0.5, 0.5)}},
+    )
+
+    # Actuator PD-gain randomization (covers the implicit-vs-explicit PD seed of
+    # the sim2sim base_ang_vel divergence). Stage-1 = no-op (scale 1.0); stage-2
+    # sets +/-20% scale via __post_init__. startup mode per IsaacLab guidance for
+    # ImplicitActuator (gains written via CPU tensors).
+    randomize_actuator_gains = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
+            "stiffness_distribution_params": (1.0, 1.0),
+            "damping_distribution_params": (1.0, 1.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
     )
 
 ##
@@ -251,6 +284,9 @@ class ObservationsCfg:
         base_ang_vel = ObsTerm(
             func=mdp.base_ang_vel,
             scale=0.2,
+            # Stage-1 (bootstrap) noise. Stage-2 widens to +/-0.8 to cover the
+            # measured MuJoCo<->Isaac base_ang_vel divergence (p95~0.79 rad/s),
+            # applied in G0RobotLabEnvCfg.__post_init__ when DR_STAGE >= 2.
             noise=Unoise(n_min=-0.2, n_max=0.2)
         )
         projected_gravity = ObsTerm(
@@ -455,10 +491,10 @@ class TerminationsCfg:
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
+    # Rough-terrain curriculum (Unitree default). Requires use_terrain_origins=True on scene.terrain.
     # terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
     ang_vel_cmd_levels = CurrTerm(mdp.ang_vel_cmd_levels)
-    # pass
 ##
 # Environment configuration
 ##
@@ -503,6 +539,27 @@ class G0RobotLabEnvCfg(ManagerBasedRLEnvCfg):
             else:
                 if self.scene.terrain.terrain_generator is not None:
                     self.scene.terrain.terrain_generator.curriculum = False
+
+            # Staged sim2sim-hardening DR. Stage-1 leaves the bootstrap config
+            # untouched; stage-2 widens the randomization to cover the measured
+            # sim2sim gap (use to fine-tune from a stage-1 checkpoint). Curriculum
+            # advancement criteria are NOT modified here.
+            if DR_STAGE >= 2:
+                # (1) base_ang_vel obs noise: +/-0.2 -> +/-1.0 rad/s. Widened from
+                # +/-0.8 (p95) toward the measured divergence max ~1.24 rad/s,
+                # because closed-loop bav exceeds the open-loop p95 once actions
+                # start to diverge (positive feedback). +/-0.8 only got time-to-
+                # fall ~1.4s -> ~4s; push the tolerance further.
+                self.observations.policy.base_ang_vel.noise = Unoise(n_min=-1.0, n_max=1.0)
+                # (2) add angular pushes on the load-bearing base_ang_vel channel.
+                self.events.push_robot.params["velocity_range"].update({
+                    "roll": (-1.0, 1.0),
+                    "pitch": (-1.0, 1.0),
+                    "yaw": (-1.0, 1.0),
+                })
+                # (3) actuator PD-gain scale +/-20% (implicit-vs-explicit PD seed).
+                self.events.randomize_actuator_gains.params["stiffness_distribution_params"] = (0.8, 1.2)
+                self.events.randomize_actuator_gains.params["damping_distribution_params"] = (0.8, 1.2)
 
 @configclass
 class G0RobotLabPlayEnvCfg(G0RobotLabEnvCfg):
