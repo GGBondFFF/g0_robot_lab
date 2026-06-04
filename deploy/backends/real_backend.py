@@ -34,10 +34,12 @@ from ..common.rotation import quat_wxyz_from_gravity
 
 try:
     from mbus.wrapper import MbusNode
-    from mbus.idl.MotorControl import Control as McControl, MotorCmd
+    from mbus.idl.MotorControl import Control as McControl, State as McState, MotorCmd
+    from cyclonedds.internal import InvalidSample
 except Exception as _e:  # mbus only present on the deploy/robot machine
     MbusNode = None
     _MBUS_IMPORT_ERROR = _e
+    InvalidSample = ()  # isinstance(x, ()) is always False
 
 
 _DEG2RAD = np.pi / 180.0
@@ -54,6 +56,7 @@ class RealBackend:
                  bus_motor_order=None,
                  imu_gyro_in_deg: bool = False,   # TODO(hardware) verify
                  acc_sign: float = -1.0,          # TODO(hardware) verify
+                 qos_file_path: str = "/etc/mbus/config/mbus_qos.xml",
                  motor_count: int = 22):
         if MbusNode is None:
             raise RuntimeError(
@@ -78,14 +81,15 @@ class RealBackend:
             [bus_index[n] for n in self.joint_names_mj], dtype=np.int64
         )
 
-        # ---- DDS
-        self.node = MbusNode(domain_id=domain_id)
-        self.ctrl_topic = self.node.register_topic(
+        # ---- DDS. QoS comes from qos_file_path (motor topics are BEST_EFFORT;
+        # without it the default RELIABLE reader won't match mc_forwarder and
+        # you get NO data). Network/discovery config is separate: set the
+        # CYCLONEDDS_URI env var to mbus_config.xml before running.
+        self.node = MbusNode(domain_id=domain_id, qos_file_path=qos_file_path)
+        self.ctrl_topic = self.node.create_topic(
             "mc/motor_control", McControl, "mbus::MotorControl_Control")
-        self.state_topic = self.node.register_topic(
-            "mc/motor_state", __import__(
-                "mbus.idl.MotorControl", fromlist=["State"]).State,
-            "mbus::MotorControl_State")
+        self.state_topic = self.node.create_topic(
+            "mc/motor_state", McState, "mbus::MotorControl_State")
 
         self._seq = 1
         self._t0 = time.monotonic()
@@ -94,9 +98,10 @@ class RealBackend:
     # ---- state read (returns the exact dict contract MujocoBackend uses) ----
 
     def read_state(self):
-        samples = self.state_topic.read(1)
-        if samples:
-            self._last_state = samples[0]
+        # take(1) returns a single sample (newest, KeepLast(1)) or None.
+        sample = self.state_topic.take(1)
+        if sample is not None and not isinstance(sample, InvalidSample):
+            self._last_state = sample
         s = self._last_state
         if s is None:
             raise RuntimeError("No mc/motor_state received yet (motors offline?)")

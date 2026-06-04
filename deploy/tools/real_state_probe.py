@@ -41,7 +41,8 @@ def _import_mbus():
     try:
         from mbus.wrapper import MbusNode
         from mbus.idl.MotorControl import State
-        return MbusNode, State
+        from cyclonedds.internal import InvalidSample
+        return MbusNode, State, InvalidSample
     except Exception as e:
         print("ERROR: mbus python bindings not importable:", e)
         print("  Need: cyclonedds>=11, cyclonedds-python>=11, libmbus>=2.0")
@@ -60,19 +61,22 @@ def main():
     ap.add_argument("--motor-count", type=int, default=22)
     ap.add_argument("--acc-sign", type=float, default=-1.0,
                     help="sign for gravity derivation; flip if upright proj_grav != [0,0,-1]")
+    ap.add_argument("--qos-file", default="/etc/mbus/config/mbus_qos.xml",
+                    help="mbus QoS xml (motor topics are BEST_EFFORT; without a "
+                         "matching profile the reader won't match the robot).")
     ap.add_argument("--watch", action="store_true",
                     help="live-print all motor positions (for joint-id finding)")
     args = ap.parse_args()
 
-    MbusNode, State = _import_mbus()
+    MbusNode, State, InvalidSample = _import_mbus()
 
     print("=" * 78)
     print("REAL G0 STATE PROBE  (READ-ONLY — never publishes, cannot move motors)")
     print(f"  domain={args.domain}  topic=mc/motor_state  duration={args.duration}s")
     print("=" * 78)
 
-    node = MbusNode(domain_id=args.domain)
-    state_topic = node.register_topic(
+    node = MbusNode(domain_id=args.domain, qos_file_path=args.qos_file)
+    state_topic = node.create_topic(
         "mc/motor_state", State, "mbus::MotorControl_State")
 
     n = args.motor_count
@@ -96,12 +100,11 @@ def main():
 
     print("\nwaiting for first mc/motor_state frame ...")
     while time.monotonic() < t_end:
-        samples = state_topic.read(1)
-        if not samples:
+        s = state_topic.take(1)   # single newest sample or None
+        if s is None or isinstance(s, InvalidSample):
             time.sleep(0.002)
             continue
-        s = samples[0]
-        # guard against InvalidSample / partial samples
+        # guard against partial samples
         try:
             mc = int(s.motor_count)
             seq = int(s.sequence_id)

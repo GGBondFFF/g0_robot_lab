@@ -140,13 +140,35 @@ the read-only probe works with zero commands sent — motors never move.
 
 ### Laptop-side prerequisites
 
+The deploy/probe code is **all Python** — DDS is language-neutral on the wire, so
+Python (cyclonedds) interoperates with the robot's C++ `mc_forwarder`. **No C++,
+no `cpp/` folder.** Install into the **same env that runs the policy** (the one
+with `onnxruntime`, e.g. `g0_mujoco`):
+
 ```bash
-pip install cyclonedds cyclonedds-python          # CycloneDDS + IDL python backend
-pip install -e /home/lz/ws/mbus/python            # kingkong mbus python package
-sudo mkdir -p /etc/mbus/config                    # mbus wrapper reads these by default
-sudo cp /home/lz/ws/mbus/install/etc/mbus/config/{mbus_config.xml,mbus_qos.xml} \
-        /etc/mbus/config/
+export CYCLONEDDS_HOME=/home/lz/ws/dds-install     # the prebuilt CycloneDDS C lib
+pip install cyclonedds                             # eclipse python binding (one pkg)
+pip install /home/lz/ws/mbus/python                # kingkong mbus python package
 ```
+
+At **runtime** the python binding must find the C lib, and CycloneDDS reads its
+network config from `CYCLONEDDS_URI`:
+
+```bash
+export LD_LIBRARY_PATH=/home/lz/ws/dds-install/lib:$LD_LIBRARY_PATH
+export CYCLONEDDS_URI=file:///home/lz/ws/mbus/install/etc/mbus/config/mbus_config.xml
+```
+
+Two XMLs, **distinct roles** — you do NOT need to `sudo cp` to `/etc`:
+- **`mbus_config.xml`** → network/discovery (interfaces, multicast, peers).
+  Consumed via the `CYCLONEDDS_URI` env var above.
+- **`mbus_qos.xml`** → QoS profiles. Passed explicitly: probe `--qos-file ...`,
+  or yaml `real.qos_file: ...`. **Required** — the motor topics are
+  `BEST_EFFORT`; with the default (RELIABLE) QoS the reader will NOT match
+  `mc_forwarder` and you get **zero frames**.
+
+> Verified on the laptop (no robot needed): loopback pub/sub of a full
+> `MotorControl::State` round-trips with all fields intact.
 
 ### Network (read before WiFi)
 
@@ -155,7 +177,8 @@ peers; interfaces `lo`/`wlan0`/`eth0`), domain **0**.
 
 - **Many WiFi APs drop multicast** → the laptop never discovers the robot and
   the probe sees no frames. Either use a router with working IGMP/multicast, or
-  add the robot as a unicast peer in the laptop's `mbus_config.xml`:
+  add the robot as a unicast peer in your `mbus_config.xml` (then point
+  `CYCLONEDDS_URI` at it):
   ```xml
   <Discovery><Peers><Peer address="ROBOT_IP"/></Peers></Discovery>
   ```
@@ -165,9 +188,11 @@ peers; interfaces `lo`/`wlan0`/`eth0`), domain **0**.
 ### Bringup checklist (in order)
 
 1. **Connectivity (read-only, safe).** Robot powered, `mc_forwarder` up,
-   `motion-planner` stopped, laptop wired to robot. On the laptop:
+   `motion-planner` stopped, laptop wired to robot. On the laptop (env vars from
+   "Laptop-side prerequisites" already exported):
    ```bash
-   python -m deploy.tools.real_state_probe            # 10 s summary
+   python -m deploy.tools.real_state_probe \
+       --qos-file /home/lz/ws/mbus/install/etc/mbus/config/mbus_qos.xml
    ```
    Expect: frames arriving, `motor_count=22`, IMU valid. The probe prints a
    verdict and resolves the three unknowns below. If no frames → see Network.

@@ -183,6 +183,7 @@ def main():
             bus_motor_order=real_cfg.get("bus_motor_order"),
             imu_gyro_in_deg=bool(real_cfg.get("imu_gyro_in_deg", False)),
             acc_sign=float(real_cfg.get("acc_sign", -1.0)),
+            qos_file_path=real_cfg.get("qos_file", "/etc/mbus/config/mbus_qos.xml"),
         )
     else:
         backend = MujocoBackend(
