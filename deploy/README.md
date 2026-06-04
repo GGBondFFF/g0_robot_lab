@@ -94,8 +94,103 @@ Full operator SOP and the L1–L4 acceptance levels:
 
 L3 is the M2 sign-off gate and is currently `xfail` (v0 policy fall, Phase 5 / Task 10).
 
+## Real robot (kingkong G0 over CycloneDDS / mbus)
+
+The real G0 is a **custom kingkong robot — NOT Unitree**. It speaks **CycloneDDS**
+via the `mbus` library (`MotorControl::Control` / `MotorControl::State` topics),
+and its motors run **MIT-mode onboard PD**. `RealBackend` swaps in for
+`MujocoBackend`; the policy / obs / action / FSM layers are unchanged.
+
+> First-bringup scope: only the two motor topics (`mc/motor_control`,
+> `mc/motor_state`). Orientation is derived from the raw accelerometer
+> (valid quasi-static — fine for standing; switch to the fused
+> `Imu::ImuOutput.q` topic for walking).
+
+### Topology (who runs what)
+
+```
+   YOUR LAPTOP                              ROBOT (onboard SoC, RK3576)
+ ┌─────────────────────┐   CycloneDDS    ┌────────────────────────────┐
+ │ RL policy + RealBackend│  domain 0     │ mc_forwarder.service        │
+ │  send mc/motor_control ───────────────▶│   reads cmd → drives motors │
+ │  recv mc/motor_state  ◀───────────────│   reads encoders+IMU → state│
+ │ real_state_probe (read-only)          │                            │
+ └─────────────────────┘  WiFi / eth     └────────────────────────────┘
+                                          motion-planner.service: MUST be stopped
+```
+
+**Everything in this repo runs on your laptop.** DDS is location-transparent —
+the probe/backend just subscribe to what the robot publishes over the network.
+**No script here runs on the robot.**
+
+### Robot-side prerequisites (over ssh)
+
+The robot's low-level DDS↔motor bridge is `mc_forwarder.service` (kingkong
+firmware — you don't write or run it manually, just ensure it's up). The
+high-level gait brain `motion-planner.service` **also publishes
+`mc/motor_control`**, so it will fight your laptop — stop it.
+
+```bash
+ssh <robot> "sudo systemctl stop motion-planner"
+ssh <robot> "systemctl is-active mc_forwarder"   # must print: active
+```
+
+`mc_forwarder` publishes `mc/motor_state` on its own (just reading sensors), so
+the read-only probe works with zero commands sent — motors never move.
+
+### Laptop-side prerequisites
+
+```bash
+pip install cyclonedds cyclonedds-python          # CycloneDDS + IDL python backend
+pip install -e /home/lz/ws/mbus/python            # kingkong mbus python package
+sudo mkdir -p /etc/mbus/config                    # mbus wrapper reads these by default
+sudo cp /home/lz/ws/mbus/install/etc/mbus/config/{mbus_config.xml,mbus_qos.xml} \
+        /etc/mbus/config/
+```
+
+### Network (read before WiFi)
+
+`mbus_config.xml` uses **multicast discovery** (`AllowMulticast=true`, no static
+peers; interfaces `lo`/`wlan0`/`eth0`), domain **0**.
+
+- **Many WiFi APs drop multicast** → the laptop never discovers the robot and
+  the probe sees no frames. Either use a router with working IGMP/multicast, or
+  add the robot as a unicast peer in the laptop's `mbus_config.xml`:
+  ```xml
+  <Discovery><Peers><Peer address="ROBOT_IP"/></Peers></Discovery>
+  ```
+- A 50 Hz balance policy closing the loop over WiFi suffers latency + jitter.
+  **For first standing bringup use a wired Ethernet link (eth0).** WiFi later.
+
+### Bringup checklist (in order)
+
+1. **Connectivity (read-only, safe).** Robot powered, `mc_forwarder` up,
+   `motion-planner` stopped, laptop wired to robot. On the laptop:
+   ```bash
+   python -m deploy.tools.real_state_probe            # 10 s summary
+   ```
+   Expect: frames arriving, `motor_count=22`, IMU valid. The probe prints a
+   verdict and resolves the three unknowns below. If no frames → see Network.
+
+2. **Resolve the 3 hardware unknowns** (TODOs in `backends/real_backend.py`):
+   | Unknown | How the probe tells you |
+   |---|---|
+   | `BUS_MOTOR_ORDER` | `--watch`, then hand-wiggle ONE joint; the moving index is its bus slot |
+   | `IMU_GYRO_IN_DEG` | rotate base ~90° in ~1 s: peak `~1.5` → rad/s, `~90` → deg/s |
+   | `ACC_SIGN` | standing upright, `proj_grav` must be `~[0,0,-1]`; flip `--acc-sign` if not |
+   Also confirm `kp/kd` units (Nm/rad vs Nm/deg) on a stand before trusting gains.
+
+3. **Wire `RealBackend`/`RealEnv` into `main.py`** (a `--backend real` switch —
+   not done yet). Force the elastic band **off**; make Passive use
+   `apply_damping()` (NOT tau=0 — the robot would collapse).
+
+4. **Suspended/stand test first.** Hang the robot or keep it on a stand; run
+   FixStand (PD ramp to default pose) before ever entering RLBase. Keep a hand
+   on the e-stop / `p` (damping) at all times.
+
 ## What this does NOT do
 
 - Train. Use `scripts/sim2sim/g0_train_dr_dryrun.py` and IsaacLab for that.
-- Real robot. `MujocoBackend` will be swapped for a `RealBackend` later.
-- DDS. We're going Python/MuJoCo direct.
+- Real-robot **walking** yet. `RealBackend` (skeleton) covers standing via the
+  motor topics + acc-derived gravity; walking needs the fused IMU quaternion
+  and the hardware unknowns resolved (see checklist), plus `main.py` wiring.
