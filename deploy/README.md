@@ -180,13 +180,22 @@ peers; interfaces `lo`/`wlan0`/`eth0`), domain **0**.
    | `ACC_SIGN` | standing upright, `proj_grav` must be `~[0,0,-1]`; flip `--acc-sign` if not |
    Also confirm `kp/kd` units (Nm/rad vs Nm/deg) on a stand before trusting gains.
 
-3. **Wire `RealBackend`/`RealEnv` into `main.py`** (a `--backend real` switch —
-   not done yet). Force the elastic band **off**; make Passive use
-   `apply_damping()` (NOT tau=0 — the robot would collapse).
+3. **Run against the robot.** `main.py` takes `--backend real`: it swaps in
+   `RealBackend` + `RealEnv` (one MIT command per policy step, paced to
+   `step_dt`), forces the elastic band **off**, starts in **Passive** (damping),
+   and reads `p`/`f`/`r` from stdin (no viewer). `p` is the software E-stop
+   (damping, not tau=0).
+   ```bash
+   python -m deploy.robots.g0.main \
+       --config deploy/robots/g0/config/policy/velocity/v0/deploy.yaml \
+       --backend real --duration 120
+   ```
+   Optional `real:` block in the yaml: `domain_id`, `bus_motor_order`,
+   `imu_gyro_in_deg`, `acc_sign` (the values resolved in step 2).
 
-4. **Suspended/stand test first.** Hang the robot or keep it on a stand; run
-   FixStand (PD ramp to default pose) before ever entering RLBase. Keep a hand
-   on the e-stop / `p` (damping) at all times.
+4. **Suspended/stand test first.** Hang the robot or keep it on a stand. From
+   Passive press `f` (FixStand: PD ramp to default pose); only then `r` (RLBase).
+   Keep a hand on the E-stop / `p` (damping) at all times.
 
 ## What this does NOT do
 

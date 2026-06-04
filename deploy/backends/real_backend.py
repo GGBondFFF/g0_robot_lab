@@ -163,8 +163,18 @@ class RealBackend:
         Real Passive must NOT be tau=0 (the robot would collapse). Hold current
         pose stiffness-free with kd damping so it settles softly.
         """
+        kd_mj = np.asarray(kd_mj, dtype=np.float64)
         s = self.read_state()
         self.apply_joint_command(s["q_mj"], np.zeros_like(kd_mj), kd_mj)
+
+    # ---- elastic-band surface: sim-only, no-ops on hardware so the shared
+    # tick()/ElasticBand path runs unchanged (band is forced off for real).
+
+    def apply_external_force(self, force_w):
+        pass
+
+    def clear_external_force(self):
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -203,12 +213,8 @@ class RealEnv(ManagerBasedRLEnv):
         return self._build_obs()
 
     def step_torque(self, tau_mj):
-        # Passive. On real hardware prefer damping over true zero torque.
-        # TODO(safety): wire a damping kd here instead of feedforward-only.
-        self.backend.apply_joint_command(
-            self.backend.read_state()["q_mj"],
-            np.zeros(self.backend.motor_count),
-            np.zeros(self.backend.motor_count),
-            tau_ff_mj=tau_mj)
+        # Passive on real hardware = damping (kd only), NOT zero torque — a
+        # tau=0 limp robot would collapse. This is the software E-stop ('p').
+        self.backend.apply_damping(self.act_mgr.kd_mj)
         self._pace()
         return self._build_obs()
