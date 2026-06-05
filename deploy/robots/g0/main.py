@@ -112,6 +112,35 @@ def tick(cmd_mgr, rc, band, backend, fsm, *, length_step_m: float = 0.1,
     fsm.step()
 
 
+class _StdinKeyPump:
+    """Non-blocking single-key stdin reader for real-robot headless control.
+
+    Puts the terminal in cbreak mode so a single keypress registers immediately
+    — notably 'p' (Passive/damping), the software E-stop — without the MuJoCo
+    viewer. Restored on close(). Velocity numpad keys are viewer/gamepad-only;
+    the safety + FSM keys (p/f/r) are what stdin covers.
+    """
+
+    def __init__(self, rc):
+        import termios
+        import tty
+        self.rc = rc
+        self._termios = termios
+        self.fd = sys.stdin.fileno()
+        self._old = termios.tcgetattr(self.fd)
+        tty.setcbreak(self.fd)
+
+    def poll(self):
+        import select
+        while select.select([sys.stdin], [], [], 0)[0]:
+            ch = sys.stdin.read(1)
+            if ch:
+                self.rc.on_key(ch)
+
+    def close(self):
+        self._termios.tcsetattr(self.fd, self._termios.TCSADRAIN, self._old)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -120,10 +149,13 @@ def main():
     ap.add_argument("--duration", type=float, default=120.0)
     ap.add_argument("--no-viewer", action="store_true")
     ap.add_argument("--realtime", action="store_true")
-    ap.add_argument("--initial-state", default="fix_stand",
-                    choices=("passive", "fix_stand", "rl_base"))
+    ap.add_argument("--initial-state", default=None,
+                    choices=("passive", "fix_stand", "rl_base"),
+                    help="Default: passive for --backend real, else fix_stand.")
     ap.add_argument("--elastic-band", choices=("on", "off"), default=None,
                     help="Override yaml elastic_band.enabled.")
+    ap.add_argument("--backend", choices=("mujoco", "real"), default="mujoco",
+                    help="mujoco = sim2sim; real = kingkong G0 over DDS (mbus).")
     args = ap.parse_args()
 
     repo_root = args.repo_root or os.path.abspath(
@@ -139,13 +171,27 @@ def main():
     joint_names_sdk = cfg["joint_names_sdk"]
     joint_names_isaac = cfg["joint_names_isaac"]
 
+    is_real = (args.backend == "real")
+
     # ---- backend
-    backend = MujocoBackend(
-        mjcf_path=mjcf_path,
-        sim_dt=cfg.get("sim_dt"),
-        keyframe=cfg.get("keyframe"),
-        joint_names_mj=G0_JOINT_NAMES_MJ,
-    )
+    if is_real:
+        from deploy.backends.real_backend import RealBackend, RealEnv
+        real_cfg = cfg.get("real", {}) or {}
+        backend = RealBackend(
+            joint_names_mj=G0_JOINT_NAMES_MJ,
+            domain_id=int(real_cfg.get("domain_id", 0)),
+            bus_motor_order=real_cfg.get("bus_motor_order"),
+            imu_gyro_in_deg=bool(real_cfg.get("imu_gyro_in_deg", False)),
+            acc_sign=float(real_cfg.get("acc_sign", -1.0)),
+            qos_file_path=real_cfg.get("qos_file", "/etc/mbus/config/mbus_qos.xml"),
+        )
+    else:
+        backend = MujocoBackend(
+            mjcf_path=mjcf_path,
+            sim_dt=cfg.get("sim_dt"),
+            keyframe=cfg.get("keyframe"),
+            joint_names_mj=G0_JOINT_NAMES_MJ,
+        )
 
     # ---- defaults & gains, all in SDK / MJ order
     default_q_sdk = np.array(
@@ -182,13 +228,23 @@ def main():
         joint_names_mj=G0_JOINT_NAMES_MJ,
         default_q_isaac=default_q_isaac,
     )
-    env = ManagerBasedRLEnv(
-        backend=backend,
-        command_manager=cmd_mgr,
-        action_manager=act_mgr,
-        observation_manager=obs_mgr,
-        decimation=int(cfg["decimation"]),
-    )
+    if is_real:
+        env = RealEnv(
+            backend=backend,
+            command_manager=cmd_mgr,
+            action_manager=act_mgr,
+            observation_manager=obs_mgr,
+            decimation=int(cfg["decimation"]),
+            step_dt=float(cfg["step_dt"]),
+        )
+    else:
+        env = ManagerBasedRLEnv(
+            backend=backend,
+            command_manager=cmd_mgr,
+            action_manager=act_mgr,
+            observation_manager=obs_mgr,
+            decimation=int(cfg["decimation"]),
+        )
     env.reset()
 
     # ---- policy
@@ -199,6 +255,8 @@ def main():
     eb_enabled = eb_cfg.get("enabled", False)
     if args.elastic_band is not None:
         eb_enabled = (args.elastic_band == "on")
+    if is_real:
+        eb_enabled = False  # elastic band is sim-only; never on hardware
     band = ElasticBand(
         anchor=eb_cfg.get("anchor", (0.0, 0.0, 2.0)),
         stiffness=eb_cfg.get("stiffness", 50.0),
@@ -238,13 +296,23 @@ def main():
         ),
         "rl_base": StateRLBase(env, ort_runner=ort, rc=rc),
     }
-    fsm = CtrlFSM(states, initial=args.initial_state, rc=rc)
+    initial_state = args.initial_state
+    if initial_state is None:
+        # Safe default on hardware: start limp-with-damping, operator drives up.
+        initial_state = "passive" if is_real else "fix_stand"
+    fsm = CtrlFSM(states, initial=initial_state, rc=rc)
 
     print("=" * 90)
-    print("G0 deploy (Python/MuJoCo)  policy = {}".format(onnx_path))
+    print("G0 deploy ({})  policy = {}".format(
+        "REAL/DDS" if is_real else "Python/MuJoCo", onnx_path))
     print("=" * 90)
-    print("Keys: p=Passive  f=FixStand  r=RLBase")
-    print("      NUMPAD: 8/2=vx+/-  4/6=vy+/-  7/9=wz+/-  5=zero cmd")
+    if is_real:
+        print("REAL ROBOT over DDS (mbus). Elastic band OFF. Keep a hand on E-stop.")
+        print("Keys (stdin): p=Passive/DAMPING (E-stop)  f=FixStand  r=RLBase")
+        print("  start state:", initial_state)
+    else:
+        print("Keys: p=Passive  f=FixStand  r=RLBase")
+        print("      NUMPAD: 8/2=vx+/-  4/6=vy+/-  7/9=wz+/-  5=zero cmd")
     if staging is not None:
         print("-" * 90)
         print("STAGING SOP (Unitree-aligned, band=on):")
@@ -256,15 +324,25 @@ def main():
 
     step_dt = float(cfg["step_dt"])
 
-    if args.no_viewer:
+    if args.no_viewer or is_real:
+        # Headless loop. For real hardware there is no MuJoCo viewer, so pacing
+        # to step_dt happens inside RealEnv.step_*; keyboard (p/f/r incl. E-stop)
+        # comes from a cbreak stdin reader when we have a real TTY.
+        key_pump = _StdinKeyPump(rc) if (is_real and sys.stdin.isatty()) else None
         n_steps = int(args.duration / step_dt)
         t0 = time.time()
-        for i in range(n_steps):
-            tick(cmd_mgr, rc, band, backend, fsm,
-                 length_step_m=length_step_m, staging=staging)
-            if (i % 50) == 0:
-                s = backend.read_state()
-                print(f"  t={s['sim_time']:6.2f}  state={fsm.current.name:10s}  cmd={rc.get_cmd()}")
+        try:
+            for i in range(n_steps):
+                if key_pump is not None:
+                    key_pump.poll()
+                tick(cmd_mgr, rc, band, backend, fsm,
+                     length_step_m=length_step_m, staging=staging)
+                if (i % 50) == 0:
+                    s = backend.read_state()
+                    print(f"  t={s['sim_time']:6.2f}  state={fsm.current.name:10s}  cmd={rc.get_cmd()}")
+        finally:
+            if key_pump is not None:
+                key_pump.close()
         print(f"[done] wall_s={time.time() - t0:.2f}")
     else:
         import mujoco

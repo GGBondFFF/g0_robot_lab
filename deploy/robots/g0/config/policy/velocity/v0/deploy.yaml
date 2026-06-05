@@ -12,6 +12,18 @@ policy:
   # onnx_path: deploy/robots/g0/config/policy/velocity/v0/policy.onnx
   onnx_path: logs/rsl_rl/g0_velocity/2026-06-04_10-39-27/exported/policy.onnx
 
+# Real-robot backend (kingkong G0 over CycloneDDS/mbus). Used ONLY with
+# `--backend real`; ignored by the default MuJoCo backend. Fill the three
+# hardware TODOs from deploy/tools/real_state_probe.py BEFORE driving motors.
+real:
+  domain_id: 0                              # CycloneDDS domain
+  qos_file: /etc/mbus/config/mbus_qos.xml   # or .../ws/mbus/install/etc/mbus/config/mbus_qos.xml
+  bus_motor_order: null                     # TODO(hardware): 22 motor-index->joint-name order
+                                            #   (null = MJ-order PLACEHOLDER, almost certainly wrong;
+                                            #    find it with `real_state_probe.py --watch`)
+  imu_gyro_in_deg: false                    # TODO(hardware): true if imu.gyro is deg/s
+  acc_sign: -1.0                            # TODO(hardware): flip if upright proj_grav != [0,0,-1]
+
 # Time
 step_dt: 0.02          # policy dt (s)
 sim_dt:  0.002         # MJCF timestep override (None -> use MJCF default)
